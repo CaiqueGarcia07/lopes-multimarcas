@@ -10,11 +10,11 @@
     "mock": "node examples/mock-server.mjs"
   },
   "dependencies": {
+    "@supabase/supabase-js": "^2.110.9",
     "@vitejs/plugin-react": "latest",
     "lucide-react": "latest",
-    "vite": "latest",
     "react": "latest",
-    "react-dom": "latest"
-  },
-  "devDependencies": {}
+    "react-dom": "latest",
+    "vite": "latest"
+  }
 }

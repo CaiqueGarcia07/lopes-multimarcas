@@ -66,6 +66,18 @@ VITE_SUPABASE_ANON_KEY=sua-chave-anon-publica
 - A chave `anon` é pública por design; a proteção vem da RLS: ela **só consegue inserir** linhas (nunca ler, alterar ou apagar) e o próprio banco rejeita inserções sem `consentimento_autorizado = true`.
 - A tabela guarda dados pessoais (CPF, renda, dados bancários): a loja é responsável, perante a LGPD, por manter política de retenção e atender pedidos de exclusão.
 
+## CRM (equipe da loja)
+
+O CRM roda em **`/crm/`** (ex.: `http://localhost:5173/crm/`) e inclui: dashboard com KPIs (fichas, aprovações, vendas e valores), lista de fichas com filtros (região, idade, carro, entrada, instituição, indicação) e busca global (protocolo, CPF, celular, carro, nome), esteira kanban com arrastar-e-soltar e ações em massa, estoque de veículos, follow-up com histórico e indicadores de tempo de espera, e tema claro/escuro.
+
+Para ativar com dados reais:
+
+1. No **SQL Editor** do Supabase, execute [`supabase/schema-crm.sql`](supabase/schema-crm.sql) (cria `veiculos` com o estoque atual, `followups` e os campos de negociação em `propostas`).
+2. Em **Authentication → Users → Add user**, crie o e-mail/senha de cada pessoa da equipe (marque "Auto Confirm User").
+3. Acesse `/crm/` e faça login.
+
+Sem login é possível clicar em **"Ver demonstração"** para conhecer o CRM com dados fictícios. A segurança segue o mesmo princípio da ficha: o papel `authenticated` (equipe logada) gerencia tudo; o `anon` (site público) continua apenas inserindo fichas e não enxerga estoque nem follow-ups.
+
 ## Envio por webhook (alternativa)
 
 Sem as variáveis do Supabase, o formulário usa `VITE_PROPOSAL_API_URL`:
