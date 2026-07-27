@@ -79,32 +79,10 @@ select:focus-visible {
   line-height: 1;
 }
 
-.brand-mark {
-  width: 48px;
-  height: 48px;
-  display: grid;
-  place-items: center;
-  border-radius: 15px;
-  background: var(--blue);
-  box-shadow: 0 10px 24px rgba(1, 175, 244, 0.25);
-}
-
-.brand strong,
-.brand small {
+.brand-logo {
   display: block;
-  font-family: 'Montserrat', sans-serif;
-  letter-spacing: 0.08em;
-}
-
-.brand strong {
-  font-size: 1.04rem;
-}
-
-.brand small {
-  margin-top: 4px;
-  font-size: 0.58rem;
-  color: var(--blue);
-  letter-spacing: 0.25em;
+  height: 42px;
+  width: auto;
 }
 
 .secure-label {
@@ -302,6 +280,36 @@ main {
   line-height: 1.55;
 }
 
+.sidebar-checklist {
+  margin: 4px 0 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 9px;
+}
+
+.sidebar-checklist li {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.sidebar-checklist li svg {
+  flex: 0 0 auto;
+  color: #b9c5cc;
+}
+
+.sidebar-checklist li.done {
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.sidebar-checklist li.done svg {
+  color: var(--success);
+}
+
 .sidebar-card h2 {
   margin: 0 0 8px;
   font-size: 1.05rem;
@@ -424,6 +432,51 @@ main {
   font-size: 0.83rem;
 }
 
+.section-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 11px;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+}
+
+.section-badge.complete {
+  color: var(--success);
+  background: #ecfdf3;
+}
+
+.section-badge.pending {
+  color: #92400e;
+  background: #fef3c7;
+}
+
+.section-badge.optional {
+  color: var(--muted);
+  background: #eef2f4;
+}
+
+.section-note {
+  margin-bottom: 18px;
+  padding: 13px 15px;
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  border-radius: 13px;
+  color: #075985;
+  background: #eaf8ff;
+  font-size: 0.83rem;
+  line-height: 1.5;
+}
+
+.section-note svg {
+  flex: 0 0 auto;
+  margin-top: 2px;
+}
+
 .section-chevron {
   transition: transform 180ms ease;
 }
@@ -520,6 +573,20 @@ main {
   font-weight: 600;
 }
 
+.field-hint {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  margin-top: 6px;
+  color: var(--muted);
+  font-size: 0.76rem;
+}
+
+.field-hint svg {
+  flex: 0 0 auto;
+  color: var(--blue-dark);
+}
+
 .choice-group {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -601,15 +668,60 @@ main {
 }
 
 .consent-card input {
-  width: 18px;
-  height: 18px;
+  width: 22px;
+  height: 22px;
   flex: 0 0 auto;
-  margin-top: 2px;
+  margin-top: 1px;
   accent-color: var(--blue);
+  cursor: pointer;
 }
 
 .consent-card strong {
   color: var(--blue-dark);
+}
+
+.consent-heading {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+  color: #075985;
+  font-size: 0.92rem;
+}
+
+.consent-heading strong {
+  color: inherit;
+}
+
+.consent-details {
+  margin-top: 14px;
+  border-top: 1px solid #ccefff;
+  padding-top: 12px;
+}
+
+.consent-details summary {
+  color: var(--blue-dark);
+  font-size: 0.84rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.consent-details summary:hover {
+  text-decoration: underline;
+}
+
+.consent-details ul {
+  margin: 10px 0 0;
+  padding-left: 20px;
+  display: grid;
+  gap: 7px;
+  color: #40505a;
+  font-size: 0.83rem;
+  line-height: 1.55;
+}
+
+.consent-details strong {
+  color: #075985;
 }
 
 .notice {
@@ -715,8 +827,10 @@ footer {
   font-weight: 700;
 }
 
-.footer-brand svg {
-  color: var(--blue);
+.footer-logo {
+  display: block;
+  height: 34px;
+  width: auto;
 }
 
 @media (max-width: 960px) {
@@ -755,8 +869,23 @@ footer {
     padding-inline: 18px;
   }
 
+  .brand-logo {
+    height: 36px;
+  }
+
   .secure-label {
     display: none;
+  }
+
+  .section-badge {
+    padding: 4px 9px;
+    font-size: 0.66rem;
+  }
+
+  .protocol-box {
+    flex-direction: column;
+    align-items: stretch;
+    text-align: center;
   }
 
   .hero {
@@ -842,41 +971,103 @@ footer {
   background: #fff8f7;
 }
 
-.success-card {
-  margin-top: 22px;
-  padding: 17px 18px;
-  display: flex;
-  align-items: center;
-  gap: 13px;
-  border: 1px solid #abefc6;
-  border-radius: 15px;
-  color: var(--success);
-  background: #ecfdf3;
+.success-panel {
+  text-align: center;
+  animation: fade-in 220ms ease-out;
 }
 
-.success-icon {
-  width: 42px;
-  height: 42px;
-  flex: 0 0 auto;
+.success-panel-icon {
+  width: 84px;
+  height: 84px;
+  margin: 8px auto 18px;
   display: grid;
   place-items: center;
   border-radius: 50%;
-  color: var(--white);
-  background: var(--success);
+  color: var(--success);
+  background: #ecfdf3;
+  border: 1px solid #abefc6;
 }
 
-.success-card strong,
-.success-card span {
+.success-panel h2 {
+  margin: 0 0 10px;
+  font-family: 'Montserrat', sans-serif;
+  font-size: clamp(1.5rem, 3vw, 2rem);
+  letter-spacing: -0.03em;
+}
+
+.success-panel-lead {
+  max-width: 480px;
+  margin: 0 auto;
+  color: var(--muted);
+  line-height: 1.6;
+}
+
+.protocol-box {
+  margin: 24px auto 0;
+  padding: 16px 20px;
+  width: min(430px, 100%);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  border: 1px dashed #a9d9ef;
+  border-radius: 15px;
+  background: #f2fbff;
+  text-align: left;
+}
+
+.protocol-label {
   display: block;
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
 }
 
-.success-card strong {
-  margin-bottom: 3px;
-  color: #054f31;
+.protocol-number {
+  display: block;
+  margin-top: 4px;
+  font-family: 'Montserrat', sans-serif;
+  font-size: 1.25rem;
+  letter-spacing: 0.03em;
+  color: var(--ink);
 }
 
-.success-card span {
-  font-size: 0.84rem;
+.success-panel .notice {
+  width: min(430px, 100%);
+  margin-inline: auto;
+}
+
+.success-steps {
+  margin: 28px auto 0;
+  padding: 20px 24px;
+  width: min(480px, 100%);
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: #fbfcfd;
+  text-align: left;
+}
+
+.success-steps h3 {
+  margin: 0 0 10px;
+  font-size: 0.98rem;
+}
+
+.success-steps ol {
+  margin: 0;
+  padding-left: 20px;
+  display: grid;
+  gap: 8px;
+  color: var(--muted);
+  font-size: 0.89rem;
+  line-height: 1.55;
+}
+
+.success-actions {
+  margin-top: 26px;
+  display: flex;
+  justify-content: center;
 }
 
 .modal-backdrop {

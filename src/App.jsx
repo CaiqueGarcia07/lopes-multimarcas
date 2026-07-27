@@ -1,15 +1,18 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   BadgeCheck,
+  Check,
   CheckCircle2,
   BriefcaseBusiness,
-  Building2,
   CarFront,
   ChevronDown,
+  Circle,
   CircleDollarSign,
+  Copy,
   FileCheck2,
   Landmark,
   LoaderCircle,
+  Lock,
   MapPinHouse,
   RefreshCcw,
   Send,
@@ -22,6 +25,8 @@ import {
 import { submitProposal } from './services/proposalApi.js';
 import {
   buildProposalPayload,
+  CONSENT_TEXT,
+  generateProtocol,
   maskCEP,
   maskCNPJ,
   maskCPF,
@@ -87,7 +92,7 @@ const requiredFields = [
   'consentimento',
 ];
 
-function Field({ label, name, required, error, className = '', children, ...props }) {
+function Field({ label, name, required, error, hint, className = '', children, ...props }) {
   return (
     <div className={`field ${className}`}>
       <label htmlFor={name}>
@@ -102,6 +107,11 @@ function Field({ label, name, required, error, className = '', children, ...prop
           {...props}
         />
       )}
+      {hint && !error && (
+        <span className="field-hint">
+          <Lock size={12} aria-hidden="true" /> {hint}
+        </span>
+      )}
       {error && (
         <span className="field-error" id={`${name}-error`}>
           {error}
@@ -111,7 +121,26 @@ function Field({ label, name, required, error, className = '', children, ...prop
   );
 }
 
-function Section({ icon: Icon, title, subtitle, children, defaultOpen = true }) {
+function SectionBadge({ pending = 0, complete = false, optional = false }) {
+  if (pending > 0) {
+    return (
+      <span className="section-badge pending">
+        {pending} obrigatório{pending > 1 ? 's' : ''}
+      </span>
+    );
+  }
+  if (complete) {
+    return (
+      <span className="section-badge complete">
+        <Check size={13} aria-hidden="true" /> Completo
+      </span>
+    );
+  }
+  if (optional) return <span className="section-badge optional">Opcional</span>;
+  return null;
+}
+
+function Section({ icon: Icon, title, subtitle, badge, children, defaultOpen = true }) {
   const [open, setOpen] = useState(defaultOpen);
 
   return (
@@ -129,9 +158,12 @@ function Section({ icon: Icon, title, subtitle, children, defaultOpen = true }) 
           <strong>{title}</strong>
           <small>{subtitle}</small>
         </span>
+        {badge}
         <ChevronDown className="section-chevron" size={20} />
       </button>
-      <div className="section-content">{children}</div>
+      <div className="section-content">
+        <div className="section-inner">{children}</div>
+      </div>
     </section>
   );
 }
@@ -143,12 +175,36 @@ export default function App() {
   const [notice, setNotice] = useState('');
   const [reviewOpen, setReviewOpen] = useState(false);
   const [result, setResult] = useState(null);
+  const [protocolCopied, setProtocolCopied] = useState(false);
   const confirmButtonRef = useRef(null);
 
   const progress = useMemo(() => {
     const completed = requiredFields.filter((field) => Boolean(form[field])).length;
     return Math.round((completed / requiredFields.length) * 100);
   }, [form]);
+
+  const requiredChecklist = [
+    ['CPF', Boolean(form.cpf)],
+    ['Data de nascimento', Boolean(form.dataNascimento)],
+    ['Possui CNH?', Boolean(form.temCnh)],
+    ['Telefone celular', Boolean(form.celular)],
+    ['Autorização de uso dos dados', Boolean(form.consentimento)],
+  ];
+
+  const anyFilled = (fields) => fields.some((field) => Boolean(form[field]));
+  const sectionStatus = {
+    pessoais: {
+      pending: ['cpf', 'dataNascimento', 'temCnh'].filter((field) => !form[field]).length,
+      complete: true,
+    },
+    residenciais: { pending: form.celular ? 0 : 1, complete: true },
+    profissionais: {
+      complete: anyFilled(['nomeEmpresa', 'cargo', 'rendaMensal']),
+      optional: true,
+    },
+    bancarios: { complete: anyFilled(['banco', 'agencia', 'conta']), optional: true },
+    referencias: { complete: anyFilled(['referencia1Nome', 'referencia2Nome']), optional: true },
+  };
 
   const isDirty = useMemo(
     () => Object.entries(form).some(([key, value]) => key !== 'website' && Boolean(value)),
@@ -252,7 +308,19 @@ export default function App() {
     setNotice('');
     setStatus('idle');
     setResult(null);
+    setProtocolCopied(false);
     setReviewOpen(false);
+  };
+
+  const copyProtocol = async () => {
+    if (!result?.protocolo) return;
+    try {
+      await navigator.clipboard.writeText(result.protocolo);
+      setProtocolCopied(true);
+      setTimeout(() => setProtocolCopied(false), 2200);
+    } catch {
+      // Sem acesso à área de transferência: o número continua visível na tela.
+    }
   };
 
   const focusFirstError = () => {
@@ -282,20 +350,15 @@ export default function App() {
     try {
       // Campo invisível preenchido normalmente indica submissão automatizada.
       if (form.website) {
-        setResult({ protocolo: `LM-${Date.now().toString().slice(-10)}`, modoDemonstracao: true });
+        setResult({ protocolo: generateProtocol(), modoDemonstracao: true });
         setStatus('success');
         setReviewOpen(false);
         return;
       }
 
-      const response = await submitProposal(buildProposalPayload(form));
+      const response = await submitProposal(buildProposalPayload(form), generateProtocol());
       setResult(response);
       setStatus('success');
-      setNotice(
-        response.modoDemonstracao
-          ? 'Ficha validada em modo de demonstração. Configure a API para realizar o envio real.'
-          : 'Ficha enviada com sucesso para análise.',
-      );
       setReviewOpen(false);
     } catch (error) {
       setStatus('error');
@@ -317,11 +380,7 @@ export default function App() {
     <div className="app-shell">
       <header className="topbar">
         <a className="brand" href="#inicio" aria-label="Lopes Multimarcas">
-          <span className="brand-mark"><CarFront size={28} /></span>
-          <span>
-            <strong>LOPES</strong>
-            <small>MULTIMARCAS</small>
-          </span>
+          <img className="brand-logo" src="/lopes-multimarcas-logo.png" alt="Lopes Multimarcas" />
         </a>
         <span className="secure-label"><ShieldCheck size={17} /> Ambiente seguro</span>
       </header>
@@ -332,11 +391,13 @@ export default function App() {
             <span className="eyebrow">Simulação de financiamento</span>
             <h1>Sua próxima conquista começa aqui.</h1>
             <p>
-              Preencha seus dados para que nossa equipe encontre as melhores condições de financiamento para o seu veículo.
+              Procedência, garantia e as melhores condições para você sair dirigindo hoje.
+              Preencha seus dados e nossa equipe encontra o financiamento ideal para o seu veículo.
             </p>
             <div className="hero-trust">
               <span><BadgeCheck size={17} /> Análise personalizada</span>
               <span><ShieldCheck size={17} /> Dados protegidos</span>
+              <span><Lock size={17} /> Conforme a LGPD</span>
             </div>
           </div>
           <div className="hero-art" aria-hidden="true">
@@ -354,6 +415,14 @@ export default function App() {
               <span style={{ width: `${progress}%` }} />
             </div>
             <p>Os campos marcados com <strong>*</strong> são obrigatórios.</p>
+            <ul className="sidebar-checklist">
+              {requiredChecklist.map(([label, done]) => (
+                <li key={label} className={done ? 'done' : ''}>
+                  {done ? <CheckCircle2 size={16} aria-hidden="true" /> : <Circle size={16} aria-hidden="true" />}
+                  <span>{label}</span>
+                </li>
+              ))}
+            </ul>
             <div className="sidebar-divider" />
             <h2>Antes de começar</h2>
             <p>Tenha em mãos seus documentos pessoais, dados de residência e informações profissionais.</p>
@@ -361,11 +430,50 @@ export default function App() {
               <ShieldCheck size={22} />
               <div>
                 <strong>Privacidade em primeiro lugar</strong>
-                <span>Use HTTPS e envie os dados somente para serviços autorizados.</span>
+                <span>Seus dados são enviados de forma criptografada e usados somente para a análise do seu financiamento, conforme a LGPD.</span>
               </div>
             </div>
           </aside>
 
+          {status === 'success' && result ? (
+            <div className="form-card success-panel" role="status">
+              <span className="success-panel-icon" aria-hidden="true">
+                <CheckCircle2 size={46} />
+              </span>
+              <h2>Ficha enviada com sucesso!</h2>
+              <p className="success-panel-lead">
+                Recebemos seus dados com segurança. Guarde o número de protocolo para acompanhar sua análise.
+              </p>
+              <div className="protocol-box">
+                <div>
+                  <span className="protocol-label">Protocolo</span>
+                  <strong className="protocol-number">{result.protocolo}</strong>
+                </div>
+                <button className="button button-secondary" type="button" onClick={copyProtocol}>
+                  {protocolCopied ? <Check size={17} /> : <Copy size={17} />}
+                  {protocolCopied ? 'Copiado!' : 'Copiar'}
+                </button>
+              </div>
+              {result.modoDemonstracao && (
+                <div className="notice" role="status">
+                  Ficha validada em modo de demonstração. Configure o banco de dados para realizar o envio real.
+                </div>
+              )}
+              <div className="success-steps">
+                <h3>Próximos passos</h3>
+                <ol>
+                  <li>Nossa equipe analisa suas informações junto às instituições parceiras.</li>
+                  <li>Entramos em contato pelo celular informado em até 1 dia útil.</li>
+                  <li>Você recebe as melhores condições para sair dirigindo.</li>
+                </ol>
+              </div>
+              <div className="success-actions">
+                <button className="button button-primary" type="button" onClick={resetForm}>
+                  <RefreshCcw size={18} /> Preencher nova ficha
+                </button>
+              </div>
+            </div>
+          ) : (
           <form className="form-card" onSubmit={handleSubmit} noValidate>
             <div className="form-intro">
               <div>
@@ -391,6 +499,7 @@ export default function App() {
               icon={UserRound}
               title="Dados pessoais"
               subtitle="Informações de identificação do cliente"
+              badge={<SectionBadge {...sectionStatus.pessoais} />}
             >
               <div className="fields-grid">
                 <Field label="Nome completo" name="nome" className="span-2">
@@ -399,7 +508,7 @@ export default function App() {
                 <Field label="RG" name="rg">
                   <input id="rg" name="rg" value={form.rg} onChange={updateField} placeholder="00.000.000-0" />
                 </Field>
-                <Field label="CPF" name="cpf" required error={errors.cpf}>
+                <Field label="CPF" name="cpf" required error={errors.cpf} hint="Usado somente para a análise de crédito.">
                   <input id="cpf" name="cpf" value={form.cpf} onChange={updateField} inputMode="numeric" placeholder="000.000.000-00" aria-invalid={Boolean(errors.cpf)} aria-describedby={errors.cpf ? 'cpf-error' : undefined} />
                 </Field>
                 <Field label="Estado civil" name="estadoCivil">
@@ -445,6 +554,7 @@ export default function App() {
               icon={MapPinHouse}
               title="Dados residenciais"
               subtitle="Endereço e formas de contato"
+              badge={<SectionBadge {...sectionStatus.residenciais} />}
             >
               <div className="fields-grid">
                 <Field label="Rua / Avenida" name="ruaResidencial" className="span-2">
@@ -475,6 +585,7 @@ export default function App() {
               icon={BriefcaseBusiness}
               title="Dados profissionais"
               subtitle="Empresa, ocupação e renda mensal"
+              badge={<SectionBadge {...sectionStatus.profissionais} />}
               defaultOpen={false}
             >
               <div className="fields-grid">
@@ -487,7 +598,7 @@ export default function App() {
                 <Field label="Tempo de empresa" name="tempoEmpresa">
                   <input id="tempoEmpresa" name="tempoEmpresa" value={form.tempoEmpresa} onChange={updateField} placeholder="Ex.: 2 anos" />
                 </Field>
-                <Field label="Renda mensal" name="rendaMensal">
+                <Field label="Renda mensal" name="rendaMensal" hint="Usada apenas para dimensionar as parcelas.">
                   <input id="rendaMensal" name="rendaMensal" value={form.rendaMensal} onChange={updateField} inputMode="numeric" placeholder="R$ 0,00" />
                 </Field>
                 <Field label="CNPJ" name="cnpjEmpresa" error={errors.cnpjEmpresa}>
@@ -515,8 +626,16 @@ export default function App() {
               icon={Landmark}
               title="Dados bancários"
               subtitle="Relacionamento bancário do cliente"
+              badge={<SectionBadge {...sectionStatus.bancarios} />}
               defaultOpen={false}
             >
+              <div className="section-note">
+                <Lock size={16} aria-hidden="true" />
+                <span>
+                  <strong>Campos opcionais</strong> que ajudam a acelerar sua aprovação.
+                  Nunca solicitamos senhas, números de cartão ou códigos de segurança.
+                </span>
+              </div>
               <div className="fields-grid three-columns">
                 <Field label="Banco" name="banco">
                   <input id="banco" name="banco" value={form.banco} onChange={updateField} placeholder="Nome ou código" />
@@ -534,6 +653,7 @@ export default function App() {
               icon={UsersRound}
               title="Referências pessoais"
               subtitle="Duas pessoas que possam confirmar seus dados"
+              badge={<SectionBadge {...sectionStatus.referencias} />}
               defaultOpen={false}
             >
               <div className="reference-card">
@@ -567,25 +687,28 @@ export default function App() {
             </Section>
 
             <div className={`consent-card ${errors.consentimento ? 'has-error' : ''}`}>
+              <div className="consent-heading">
+                <ShieldCheck size={18} aria-hidden="true" />
+                <strong>Privacidade e proteção de dados</strong>
+              </div>
               <label>
                 <input type="checkbox" name="consentimento" checked={form.consentimento} onChange={updateField} aria-invalid={Boolean(errors.consentimento)} aria-describedby={errors.consentimento ? 'consentimento-error' : undefined} />
                 <span>
-                  Autorizo o tratamento dos dados informados para análise e simulação de financiamento junto a instituições financeiras.
+                  {CONSENT_TEXT}
                   <strong> *</strong>
                 </span>
               </label>
               {errors.consentimento && <span className="field-error" id="consentimento-error">{errors.consentimento}</span>}
+              <details className="consent-details">
+                <summary>Como tratamos seus dados</summary>
+                <ul>
+                  <li><strong>Finalidade:</strong> análise de crédito e simulação de financiamento — nada além disso.</li>
+                  <li><strong>Quem acessa:</strong> apenas a equipe da Lopes Multimarcas e as instituições financeiras parceiras envolvidas na sua análise.</li>
+                  <li><strong>Armazenamento:</strong> dados guardados em ambiente seguro, com acesso restrito.</li>
+                  <li><strong>Seus direitos:</strong> você pode solicitar a atualização ou a exclusão dos seus dados a qualquer momento pelos canais de atendimento da loja.</li>
+                </ul>
+              </details>
             </div>
-
-            {status === 'success' && result && (
-              <div className="success-card" role="status">
-                <span className="success-icon"><CheckCircle2 size={25} /></span>
-                <div>
-                  <strong>Ficha processada</strong>
-                  <span>Protocolo: <b>{result.protocolo}</b></span>
-                </div>
-              </div>
-            )}
 
             {notice && (
               <div className={`notice ${status === 'success' ? 'success' : status === 'error' ? 'error' : ''}`} role="status">
@@ -603,12 +726,18 @@ export default function App() {
               </button>
             </div>
           </form>
+          )}
         </div>
       </main>
 
       <footer>
-        <div className="footer-brand"><Building2 size={18} /> Lopes Multimarcas</div>
-        <span>Ficha cadastral para simulação de financiamento.</span>
+        <div className="footer-brand">
+          <img className="footer-logo" src="/lopes-multimarcas-logo.png" alt="Lopes Multimarcas" />
+        </div>
+        <span>
+          Ficha cadastral para simulação de financiamento.
+          Dados tratados conforme a LGPD (Lei nº 13.709/2018).
+        </span>
       </footer>
 
       {reviewOpen && (

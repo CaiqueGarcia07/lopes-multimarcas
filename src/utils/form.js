@@ -76,6 +76,23 @@ export function validateCNPJ(cnpj) {
   return first === Number(digits[12]) && second === Number(digits[13]);
 }
 
+// Texto exibido na tela e gravado no banco: manter uma única fonte para
+// que a versão registrada nunca divirja do que o cliente realmente leu.
+export const CONSENT_TEXT_VERSION = '2.0';
+export const CONSENT_TEXT =
+  'Autorizo a Lopes Multimarcas a tratar os dados informados nesta ficha com a finalidade exclusiva de análise de crédito e simulação de financiamento junto a instituições financeiras parceiras, conforme a Lei Geral de Proteção de Dados (Lei nº 13.709/2018). Posso solicitar a atualização ou a exclusão dos meus dados a qualquer momento pelos canais de atendimento da loja.';
+
+export const generateProtocol = () => {
+  const now = new Date();
+  const ymd = [
+    now.getFullYear(),
+    String(now.getMonth() + 1).padStart(2, '0'),
+    String(now.getDate()).padStart(2, '0'),
+  ].join('');
+  const random = Math.random().toString(36).slice(2, 6).toUpperCase();
+  return `LM-${ymd}-${random}`;
+};
+
 const emptyToNull = (value) => {
   if (typeof value === 'boolean') return value;
   const normalized = String(value ?? '').trim();
@@ -144,7 +161,7 @@ export function buildProposalPayload(form) {
     ].filter((reference) => Object.values(reference).some(Boolean)),
     consentimento: {
       autorizado: Boolean(form.consentimento),
-      textoVersao: '1.0',
+      textoVersao: CONSENT_TEXT_VERSION,
     },
   };
 }
