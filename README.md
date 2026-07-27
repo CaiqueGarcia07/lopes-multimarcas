@@ -1,6 +1,11 @@
-# Lopes Multimarcas — Ficha Cadastral v2
+# Lopes Multimarcas — Ficha Cadastral + CRM
 
-Web-app React responsivo para captura de dados usados em simulações de financiamento, seguindo a identidade visual da Lopes Multimarcas (`#01AFF4`, `#1F191B` e `#FFFFFF`).
+Web-app React responsivo para captura de fichas de financiamento e CRM interno da loja, seguindo a identidade visual da Lopes Multimarcas (`#01AFF4`, `#1F191B` e `#FFFFFF`).
+
+**No ar (GitHub Pages, publica automático a cada push na `main`):**
+
+- Formulário público: <https://caiquegarcia07.github.io/lopes-multimarcas/>
+- CRM da equipe: <https://caiquegarcia07.github.io/lopes-multimarcas/crm/>
 
 ## Recursos incluídos
 
