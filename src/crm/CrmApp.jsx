@@ -122,7 +122,7 @@ export default function CrmApp() {
   return (
     <div className="crm-shell">
       <aside className="crm-sidebar">
-        <img className="crm-logo" src="/lopes-multimarcas-logo.png" alt="Lopes Multimarcas" />
+        <img className="crm-logo" src={`${import.meta.env.BASE_URL}lopes-multimarcas-logo.png`} alt="Lopes Multimarcas" />
         <nav>
           {PAGES.map(({ id, label, icon: Icon }) => (
             <button

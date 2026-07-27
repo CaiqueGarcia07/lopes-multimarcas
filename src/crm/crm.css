@@ -775,6 +775,54 @@ label {
 .link-wa { display: inline-flex; align-items: center; gap: 5px; color: var(--blue); font-weight: 700; text-decoration: none; }
 .link-wa:hover { text-decoration: underline; }
 
+.copiar-botao {
+  display: inline-grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  margin-left: 7px;
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  color: var(--muted);
+  background: var(--surface-2);
+  vertical-align: middle;
+}
+.copiar-botao:hover { color: var(--blue); border-color: var(--blue); }
+.copiar-botao.copiado { color: var(--ok); border-color: var(--ok); }
+
+.anexos-topo { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+.anexos-dica { color: var(--muted); font-size: 0.78rem; }
+.anexo-erro { margin: 12px 0 0; }
+
+.anexos-lista { margin: 14px 0 0; padding: 0; list-style: none; display: grid; gap: 8px; }
+.anexos-lista li {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 12px;
+  border: 1px solid var(--line);
+  border-radius: 11px;
+  background: var(--surface-2);
+}
+.anexo-icone { color: var(--blue); display: grid; place-items: center; }
+.anexo-nome {
+  flex: 1;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: var(--ink);
+  font-weight: 600;
+  font-size: 0.85rem;
+  text-align: left;
+  overflow-wrap: anywhere;
+}
+.anexo-nome:hover { color: var(--blue); }
+.anexo-tamanho { color: var(--muted); font-size: 0.75rem; white-space: nowrap; }
+
 .nota-form { display: flex; gap: 9px; margin-bottom: 16px; }
 
 .timeline { margin: 0; padding: 0; list-style: none; display: grid; gap: 12px; }

@@ -380,7 +380,7 @@ export default function App() {
     <div className="app-shell">
       <header className="topbar">
         <a className="brand" href="#inicio" aria-label="Lopes Multimarcas">
-          <img className="brand-logo" src="/lopes-multimarcas-logo.png" alt="Lopes Multimarcas" />
+          <img className="brand-logo" src={`${import.meta.env.BASE_URL}lopes-multimarcas-logo.png`} alt="Lopes Multimarcas" />
         </a>
         <span className="secure-label"><ShieldCheck size={17} /> Ambiente seguro</span>
       </header>
@@ -732,7 +732,7 @@ export default function App() {
 
       <footer>
         <div className="footer-brand">
-          <img className="footer-logo" src="/lopes-multimarcas-logo.png" alt="Lopes Multimarcas" />
+          <img className="footer-logo" src={`${import.meta.env.BASE_URL}lopes-multimarcas-logo.png`} alt="Lopes Multimarcas" />
         </div>
         <span>
           Ficha cadastral para simulação de financiamento.

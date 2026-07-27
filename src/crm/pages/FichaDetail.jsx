@@ -1,5 +1,19 @@
-import { useCallback, useEffect, useState } from 'react';
-import { CarFront, Clock, MessageSquarePlus, Phone, X } from 'lucide-react';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import {
+  CarFront,
+  Check,
+  Clock,
+  Copy,
+  ExternalLink,
+  FileText,
+  Image as ImageIcon,
+  LoaderCircle,
+  MessageSquarePlus,
+  Paperclip,
+  Phone,
+  Trash2,
+  X,
+} from 'lucide-react';
 
 import { maskCurrency, onlyDigits } from '../../utils/form.js';
 import {
@@ -15,11 +29,55 @@ import {
   nomeDa,
 } from '../lib/format.js';
 
-function Info({ rotulo, children }) {
+const BANCOS = [
+  'BV FINANCEIRA',
+  'BRADESCO',
+  'BRADESCO TURBO',
+  'ITAÚ',
+  'MERCADO LIVRE',
+  'C6',
+  'CREDITAS',
+  'OMNI',
+  'BANCO PAN',
+  'SANTANDER',
+  'DAYCOVAL',
+  'SAFRA',
+];
+
+function BotaoCopiar({ valor, rotulo }) {
+  const [copiado, setCopiado] = useState(false);
+
+  const copiar = async () => {
+    try {
+      await navigator.clipboard.writeText(String(valor));
+      setCopiado(true);
+      setTimeout(() => setCopiado(false), 1800);
+    } catch {
+      // Sem acesso à área de transferência; o dado segue visível para seleção manual.
+    }
+  };
+
+  return (
+    <button
+      type="button"
+      className={`copiar-botao ${copiado ? 'copiado' : ''}`}
+      onClick={copiar}
+      title={copiado ? 'Copiado!' : `Copiar ${rotulo}`}
+      aria-label={copiado ? 'Copiado' : `Copiar ${rotulo}`}
+    >
+      {copiado ? <Check size={13} /> : <Copy size={13} />}
+    </button>
+  );
+}
+
+function Info({ rotulo, copia, children }) {
   return (
     <div className="info">
       <span className="info-rotulo">{rotulo}</span>
-      <span className="info-valor">{children ?? '—'}</span>
+      <span className="info-valor">
+        {children ?? '—'}
+        {copia != null && copia !== '' && <BotaoCopiar valor={copia} rotulo={rotulo.toLowerCase()} />}
+      </span>
     </div>
   );
 }
@@ -38,6 +96,10 @@ export default function FichaDetail({ ficha, veiculos, api, onAtualizar, onFecha
   const [nota, setNota] = useState('');
   const [salvando, setSalvando] = useState(false);
   const [aviso, setAviso] = useState('');
+  const [anexos, setAnexos] = useState([]);
+  const [enviandoAnexo, setEnviandoAnexo] = useState(false);
+  const [erroAnexo, setErroAnexo] = useState('');
+  const arquivoRef = useRef(null);
 
   useEffect(() => {
     setNegociacao({
@@ -56,9 +118,54 @@ export default function FichaDetail({ ficha, veiculos, api, onAtualizar, onFecha
     api.listFollowups(ficha.id).then(setFollowups).catch(() => setFollowups([]));
   }, [api, ficha.id]);
 
+  const carregarAnexos = useCallback(() => {
+    api.listAnexos(ficha.id).then(setAnexos).catch(() => setAnexos([]));
+  }, [api, ficha.id]);
+
   useEffect(() => {
     carregarFollowups();
-  }, [carregarFollowups]);
+    carregarAnexos();
+  }, [carregarFollowups, carregarAnexos]);
+
+  const enviarAnexo = async (event) => {
+    const arquivo = event.target.files?.[0];
+    event.target.value = '';
+    if (!arquivo) return;
+    if (!/^image\/|^application\/pdf$/.test(arquivo.type)) {
+      setErroAnexo('Apenas imagens ou PDF.');
+      return;
+    }
+    if (arquivo.size > 10 * 1024 * 1024) {
+      setErroAnexo('Arquivo acima de 10 MB.');
+      return;
+    }
+    setEnviandoAnexo(true);
+    setErroAnexo('');
+    try {
+      await api.uploadAnexo(ficha.id, arquivo);
+      carregarAnexos();
+    } catch (error) {
+      setErroAnexo(`Falha no envio: ${error.message}`);
+    } finally {
+      setEnviandoAnexo(false);
+    }
+  };
+
+  const abrirAnexo = async (anexo) => {
+    try {
+      const url = await api.getAnexoUrl(anexo.path);
+      window.open(url, '_blank', 'noopener');
+    } catch (error) {
+      setErroAnexo(`Não foi possível abrir: ${error.message}`);
+    }
+  };
+
+  const removerAnexo = async (anexo) => {
+    // eslint-disable-next-line no-alert
+    if (!window.confirm(`Excluir o anexo "${anexo.nome}"?`)) return;
+    await api.deleteAnexo(anexo.path);
+    carregarAnexos();
+  };
 
   useEffect(() => {
     const fechaComEsc = (event) => event.key === 'Escape' && onFechar();
@@ -84,7 +191,7 @@ export default function FichaDetail({ ficha, veiculos, api, onAtualizar, onFecha
         veiculo_id: negociacao.veiculo_id || null,
         valor_venda_centavos: negociacao.valor_venda ? Number(onlyDigits(negociacao.valor_venda)) : null,
         valor_entrada_centavos: negociacao.valor_entrada ? Number(onlyDigits(negociacao.valor_entrada)) : null,
-        instituicao_financeira: negociacao.instituicao_financeira.trim() || null,
+        instituicao_financeira: (negociacao.instituicao_financeira || '').trim() || null,
         indicacao: negociacao.indicacao.trim() || null,
         regiao: negociacao.regiao.trim() || null,
         responsavel: negociacao.responsavel.trim() || null,
@@ -177,7 +284,15 @@ export default function FichaDetail({ ficha, veiculos, api, onAtualizar, onFecha
               </div>
               <div>
                 <label>Instituição financeira</label>
-                <input value={negociacao.instituicao_financeira || ''} onChange={campo('instituicao_financeira')} placeholder="Ex.: Santander" />
+                <select value={negociacao.instituicao_financeira || ''} onChange={campo('instituicao_financeira')}>
+                  <option value="">Nenhuma / aguardando</option>
+                  {negociacao.instituicao_financeira && !BANCOS.includes(negociacao.instituicao_financeira) && (
+                    <option value={negociacao.instituicao_financeira}>{negociacao.instituicao_financeira}</option>
+                  )}
+                  {BANCOS.map((banco) => (
+                    <option key={banco} value={banco}>{banco}</option>
+                  ))}
+                </select>
               </div>
               <div>
                 <label>Indicação</label>
@@ -207,24 +322,35 @@ export default function FichaDetail({ ficha, veiculos, api, onAtualizar, onFecha
           <section>
             <h3>Dados do cliente</h3>
             <div className="info-grid">
-              <Info rotulo="CPF">{fmtCPF(ficha.cpf)}</Info>
-              <Info rotulo="Idade">{idade != null ? `${idade} anos (${fmtDate(cliente.dataNascimento)})` : null}</Info>
-              <Info rotulo="Celular">
+              <Info rotulo="Nome completo" copia={nomeDa(ficha)}>{nomeDa(ficha)}</Info>
+              <Info rotulo="CPF" copia={ficha.cpf}>{fmtCPF(ficha.cpf)}</Info>
+              <Info rotulo="Nascimento" copia={cliente.dataNascimento ? fmtDate(cliente.dataNascimento) : null}>
+                {idade != null ? `${fmtDate(cliente.dataNascimento)} (${idade} anos)` : null}
+              </Info>
+              <Info rotulo="Celular" copia={ficha.celular}>
                 {whatsapp ? (
                   <a href={whatsapp} target="_blank" rel="noreferrer" className="link-wa">
                     <Phone size={13} /> {fmtPhone(ficha.celular)}
                   </a>
                 ) : null}
               </Info>
-              <Info rotulo="E-mail">{ficha.email}</Info>
-              <Info rotulo="Estado civil">{cliente.estadoCivil}</Info>
+              <Info rotulo="E-mail" copia={ficha.email}>{ficha.email}</Info>
+              <Info rotulo="Estado civil" copia={cliente.estadoCivil}>{cliente.estadoCivil}</Info>
               <Info rotulo="CNH">{cliente.possuiCnh ? 'Sim' : 'Não'}</Info>
-              <Info rotulo="Endereço">
+              <Info
+                rotulo="Endereço"
+                copia={[residencia.logradouro, residencia.numero, residencia.bairro].filter(Boolean).join(', ') || null}
+              >
                 {[residencia.logradouro, residencia.numero, residencia.bairro].filter(Boolean).join(', ') || null}
               </Info>
-              <Info rotulo="Renda mensal">{fmtBRL(ficha.renda_mensal_centavos)}</Info>
-              <Info rotulo="Empresa">{trabalho.empresa}</Info>
-              <Info rotulo="Cargo">{trabalho.cargo}</Info>
+              <Info
+                rotulo="Renda mensal"
+                copia={ficha.renda_mensal_centavos != null ? fmtBRL(ficha.renda_mensal_centavos) : null}
+              >
+                {fmtBRL(ficha.renda_mensal_centavos)}
+              </Info>
+              <Info rotulo="Empresa" copia={trabalho.empresa}>{trabalho.empresa}</Info>
+              <Info rotulo="Cargo" copia={trabalho.cargo}>{trabalho.cargo}</Info>
             </div>
             {referencias.length > 0 && (
               <div className="referencias-linha">
@@ -235,6 +361,48 @@ export default function FichaDetail({ ficha, veiculos, api, onAtualizar, onFecha
                     .join(' · ')}
                 </span>
               </div>
+            )}
+          </section>
+
+          <section>
+            <h3><Paperclip size={16} /> Anexos</h3>
+            <div className="anexos-topo">
+              <input
+                ref={arquivoRef}
+                type="file"
+                accept="image/*,application/pdf"
+                onChange={enviarAnexo}
+                hidden
+              />
+              <button
+                type="button"
+                className="button-secondary"
+                onClick={() => arquivoRef.current?.click()}
+                disabled={enviandoAnexo}
+              >
+                {enviandoAnexo ? <LoaderCircle className="spin" size={16} /> : <Paperclip size={16} />}
+                {enviandoAnexo ? 'Enviando...' : 'Anexar imagem ou PDF'}
+              </button>
+              <span className="anexos-dica">Documentos, comprovantes e fotos ficam guardados nesta ficha (até 10 MB cada).</span>
+            </div>
+            {erroAnexo && <div className="crm-error anexo-erro">{erroAnexo}</div>}
+            {anexos.length > 0 && (
+              <ul className="anexos-lista">
+                {anexos.map((anexo) => (
+                  <li key={anexo.path}>
+                    <span className="anexo-icone">
+                      {anexo.tipo === 'pdf' ? <FileText size={17} /> : <ImageIcon size={17} />}
+                    </span>
+                    <button type="button" className="anexo-nome" onClick={() => abrirAnexo(anexo)} title="Abrir em nova aba">
+                      {anexo.nome} <ExternalLink size={12} />
+                    </button>
+                    <span className="anexo-tamanho">{anexo.tamanho ? `${(anexo.tamanho / 1024 / 1024).toFixed(1)} MB` : ''}</span>
+                    <button type="button" className="icon-button perigo" onClick={() => removerAnexo(anexo)} aria-label={`Excluir ${anexo.nome}`}>
+                      <Trash2 size={15} />
+                    </button>
+                  </li>
+                ))}
+              </ul>
             )}
           </section>
 

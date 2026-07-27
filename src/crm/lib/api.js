@@ -75,6 +75,42 @@ export function createSupabaseApi(client, userEmail) {
           .single(),
       );
     },
+
+    // Anexos ficam no bucket privado "anexos", um diretório por ficha.
+    async listAnexos(propostaId) {
+      const arquivos = unwrap(
+        await client.storage.from('anexos').list(propostaId, { sortBy: { column: 'created_at', order: 'desc' } }),
+      );
+      return (arquivos || [])
+        .filter((a) => a.name)
+        .map((a) => ({
+          path: `${propostaId}/${a.name}`,
+          nome: a.name.replace(/^\d+-/, ''),
+          tamanho: a.metadata?.size ?? null,
+          tipo: /\.pdf$/i.test(a.name) ? 'pdf' : 'imagem',
+        }));
+    },
+
+    async uploadAnexo(propostaId, arquivo) {
+      const nomeSeguro = arquivo.name
+        .normalize('NFD')
+        .replace(/[̀-ͯ]/g, '')
+        .replace(/[^\w.-]+/g, '_');
+      unwrap(
+        await client.storage
+          .from('anexos')
+          .upload(`${propostaId}/${Date.now()}-${nomeSeguro}`, arquivo, { contentType: arquivo.type }),
+      );
+    },
+
+    async getAnexoUrl(path) {
+      const data = unwrap(await client.storage.from('anexos').createSignedUrl(path, 3600));
+      return data.signedUrl;
+    },
+
+    async deleteAnexo(path) {
+      unwrap(await client.storage.from('anexos').remove([path]));
+    },
   };
 }
 
@@ -83,6 +119,7 @@ export function createDemoApi() {
   let fichas = demoFichas.map((f) => ({ ...f }));
   let veiculos = demoVeiculos.map((v) => ({ ...v }));
   let followups = demoFollowups.map((f) => ({ ...f }));
+  let anexosDemo = [];
   let seq = 100;
 
   const comVeiculo = (ficha) => ({
@@ -165,6 +202,35 @@ export function createDemoApi() {
       };
       followups = [novo, ...followups];
       return novo;
+    },
+
+    async listAnexos(propostaId) {
+      await latency();
+      return anexosDemo.filter((a) => a.propostaId === propostaId);
+    },
+
+    async uploadAnexo(propostaId, arquivo) {
+      await latency();
+      anexosDemo = [
+        {
+          propostaId,
+          path: `${propostaId}/${Date.now()}-${arquivo.name}`,
+          nome: arquivo.name,
+          tamanho: arquivo.size,
+          tipo: arquivo.type === 'application/pdf' ? 'pdf' : 'imagem',
+          url: URL.createObjectURL(arquivo),
+        },
+        ...anexosDemo,
+      ];
+    },
+
+    async getAnexoUrl(path) {
+      return anexosDemo.find((a) => a.path === path)?.url;
+    },
+
+    async deleteAnexo(path) {
+      await latency();
+      anexosDemo = anexosDemo.filter((a) => a.path !== path);
     },
   };
 }

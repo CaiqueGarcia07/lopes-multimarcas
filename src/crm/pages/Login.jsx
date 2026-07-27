@@ -33,7 +33,7 @@ export default function Login({ supabaseConfigurado, onDemo, theme, onToggleThem
       </button>
 
       <div className="login-card">
-        <img className="login-logo" src="/lopes-multimarcas-logo.png" alt="Lopes Multimarcas" />
+        <img className="login-logo" src={`${import.meta.env.BASE_URL}lopes-multimarcas-logo.png`} alt="Lopes Multimarcas" />
         <h1>CRM Lopes Multimarcas</h1>
         <p className="login-sub">
           <ShieldCheck size={15} /> Acesso restrito à equipe
