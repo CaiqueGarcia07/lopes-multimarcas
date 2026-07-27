@@ -41,22 +41,41 @@ npm install
 npm run dev
 ```
 
-## Configurar o envio
+## Configurar o Supabase (recomendado)
 
-Copie o arquivo de exemplo:
+As fichas são gravadas na tabela `propostas` de um projeto Supabase (PostgreSQL gerenciado, com painel visual gratuito), já preparada para o futuro dashboard/CRM (colunas de `status`, `responsavel`, `observacoes`).
+
+1. Crie uma conta gratuita em [supabase.com](https://supabase.com) e um novo projeto (região **São Paulo — `sa-east-1`**). Guarde a senha do banco em local seguro (o formulário não a utiliza).
+2. No painel do projeto, abra **SQL Editor → New query**, cole o conteúdo de [`supabase/schema.sql`](supabase/schema.sql) e clique em **Run**.
+3. Em **Project Settings → API**, copie a **Project URL** e a chave **anon public**.
+4. Copie o arquivo de exemplo e preencha:
 
 ```bash
 cp .env.example .env.local
 ```
 
-Configure o endpoint:
+```env
+VITE_SUPABASE_URL=https://SEU-PROJETO.supabase.co
+VITE_SUPABASE_ANON_KEY=sua-chave-anon-publica
+```
+
+5. Rode `npm run dev` e envie uma ficha de teste. Ela aparece em **Table Editor → propostas** com `status = 'novo'`.
+
+### Segurança do banco
+
+- A chave `anon` é pública por design; a proteção vem da RLS: ela **só consegue inserir** linhas (nunca ler, alterar ou apagar) e o próprio banco rejeita inserções sem `consentimento_autorizado = true`.
+- A tabela guarda dados pessoais (CPF, renda, dados bancários): a loja é responsável, perante a LGPD, por manter política de retenção e atender pedidos de exclusão.
+
+## Envio por webhook (alternativa)
+
+Sem as variáveis do Supabase, o formulário usa `VITE_PROPOSAL_API_URL`:
 
 ```env
 VITE_PROPOSAL_API_URL=https://api.exemplo.com/propostas
 VITE_DEMO_MODE=false
 ```
 
-Quando `VITE_PROPOSAL_API_URL` estiver vazio e `VITE_DEMO_MODE=true`, o formulário simula o envio e gera um protocolo local. Nenhum dado sai do navegador nesse modo.
+Quando nenhum destino está configurado e `VITE_DEMO_MODE=true`, o formulário simula o envio e gera um protocolo local. Nenhum dado sai do navegador nesse modo.
 
 ## Testar com o servidor local
 
