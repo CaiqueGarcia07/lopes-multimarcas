@@ -1,7 +1,15 @@
 import { useState } from 'react';
 import { Eye, LoaderCircle, Moon, PlayCircle, ShieldCheck, Sun } from 'lucide-react';
 
+import { Alert, AlertDescription } from '@/components/ui/alert.jsx';
+import { Button } from '@/components/ui/button.jsx';
+import { Card, CardContent } from '@/components/ui/card.jsx';
+import { Input } from '@/components/ui/input.jsx';
+import { Label } from '@/components/ui/label.jsx';
+
 import { supabase } from '../lib/api.js';
+
+const ASSET = import.meta.env.BASE_URL;
 
 export default function Login({ supabaseConfigurado, onDemo, theme, onToggleTheme }) {
   const [email, setEmail] = useState('');
@@ -26,62 +34,101 @@ export default function Login({ supabaseConfigurado, onDemo, theme, onToggleThem
   };
 
   return (
-    <div className="login-screen">
-      <button type="button" className="theme-toggle login-theme" onClick={onToggleTheme}>
-        {theme === 'dark' ? <Sun size={17} /> : <Moon size={17} />}
-        {theme === 'dark' ? 'Tema claro' : 'Tema escuro'}
-      </button>
-
-      <div className="login-card">
-        <img className="login-logo" src={`${import.meta.env.BASE_URL}lopes-multimarcas-logo.png`} alt="Lopes Multimarcas" />
-        <h1>CRM Lopes Multimarcas</h1>
-        <p className="login-sub">
-          <ShieldCheck size={15} /> Acesso restrito à equipe
-        </p>
-
-        <form onSubmit={entrar}>
-          <label htmlFor="login-email">E-mail</label>
-          <input
-            id="login-email"
-            type="email"
-            autoComplete="username"
-            value={email}
-            onChange={(event) => setEmail(event.target.value)}
-            placeholder="voce@lopesmultimarcas.com.br"
-            required
-          />
-          <label htmlFor="login-senha">Senha</label>
-          <input
-            id="login-senha"
-            type="password"
-            autoComplete="current-password"
-            value={senha}
-            onChange={(event) => setSenha(event.target.value)}
-            placeholder="Sua senha"
-            required
-          />
-          {erro && <div className="login-erro">{erro}</div>}
-          {!supabaseConfigurado && (
-            <div className="login-erro">
-              Supabase não configurado (.env.local). Use o modo demonstração abaixo.
-            </div>
-          )}
-          <button className="button-primary" type="submit" disabled={carregando || !supabaseConfigurado}>
-            {carregando ? <LoaderCircle className="spin" size={18} /> : <Eye size={18} />}
-            {carregando ? 'Entrando...' : 'Entrar'}
-          </button>
-        </form>
-
-        <button type="button" className="button-demo" onClick={onDemo}>
-          <PlayCircle size={17} /> Ver demonstração com dados fictícios
-        </button>
-
-        <p className="login-hint">
-          Contas da equipe são criadas no painel do Supabase em
-          <br />
-          <strong>Authentication → Users → Add user</strong>.
-        </p>
+    <div className="relative grid min-h-screen place-items-center px-5 py-10">
+      {/* Mesmo fundo fotográfico do formulário público, para as duas telas conversarem. */}
+      <div className="pointer-events-none absolute inset-0" aria-hidden="true">
+        <div
+          className="absolute inset-0 bg-cover bg-center"
+          style={{ backgroundImage: `url(${ASSET}hero-showroom.jpg)` }}
+        />
+        <div className="absolute inset-0 bg-gradient-to-b from-[#0b0f14]/90 via-[#0b0f14]/94 to-[#0b0f14]" />
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_72%_12%,color-mix(in_srgb,var(--brand)_26%,transparent),transparent_58%)]" />
       </div>
+
+      <Button
+        variant="ghost"
+        size="sm"
+        onClick={onToggleTheme}
+        className="absolute top-5 right-5 text-white/75 hover:bg-white/10 hover:text-white"
+      >
+        {theme === 'dark' ? <Sun /> : <Moon />}
+        {theme === 'dark' ? 'Tema claro' : 'Tema escuro'}
+      </Button>
+
+      <Card className="relative w-full max-w-[26rem] shadow-lift">
+        <CardContent className="flex flex-col gap-5 px-7 py-9">
+          <div className="flex flex-col items-center gap-3 text-center">
+            {/* A logo é branca: fica sobre uma placa escura para funcionar nos dois temas. */}
+            <span className="rounded-xl bg-[#12171d] px-5 py-3">
+              <img className="h-9 w-auto" src={`${ASSET}lopes-multimarcas-logo.png`} alt="Lopes Multimarcas" />
+            </span>
+            <h1 className="font-display text-xl font-extrabold tracking-tight">CRM Lopes Multimarcas</h1>
+            <span className="inline-flex items-center gap-1.5 text-[0.82rem] font-semibold text-muted-foreground">
+              <ShieldCheck className="size-4 text-brand-strong dark:text-brand" /> Acesso restrito à equipe
+            </span>
+          </div>
+
+          <form onSubmit={entrar} className="flex flex-col gap-4">
+            <div className="flex flex-col gap-2">
+              <Label htmlFor="login-email">E-mail</Label>
+              <Input
+                id="login-email"
+                type="email"
+                autoComplete="username"
+                value={email}
+                onChange={(event) => setEmail(event.target.value)}
+                placeholder="voce@lopesmultimarcas.com.br"
+                required
+              />
+            </div>
+            <div className="flex flex-col gap-2">
+              <Label htmlFor="login-senha">Senha</Label>
+              <Input
+                id="login-senha"
+                type="password"
+                autoComplete="current-password"
+                value={senha}
+                onChange={(event) => setSenha(event.target.value)}
+                placeholder="Sua senha"
+                required
+              />
+            </div>
+
+            {erro && (
+              <Alert variant="destructive">
+                <AlertDescription>{erro}</AlertDescription>
+              </Alert>
+            )}
+            {!supabaseConfigurado && (
+              <Alert variant="warning">
+                <AlertDescription>
+                  Supabase não configurado (.env.local). Use o modo demonstração abaixo.
+                </AlertDescription>
+              </Alert>
+            )}
+
+            <Button variant="brand" type="submit" disabled={carregando || !supabaseConfigurado}>
+              {carregando ? <LoaderCircle className="animate-spin" /> : <Eye />}
+              {carregando ? 'Entrando...' : 'Entrar'}
+            </Button>
+          </form>
+
+          <Button
+            variant="outline"
+            type="button"
+            onClick={onDemo}
+            className="border-dashed border-brand/45 text-brand-strong dark:text-brand"
+          >
+            <PlayCircle /> Ver demonstração com dados fictícios
+          </Button>
+
+          <p className="text-center text-[0.78rem] leading-relaxed text-muted-foreground">
+            Contas da equipe são criadas no painel do Supabase em
+            <br />
+            <strong className="text-foreground">Authentication → Users → Add user</strong>.
+          </p>
+        </CardContent>
+      </Card>
     </div>
   );
 }

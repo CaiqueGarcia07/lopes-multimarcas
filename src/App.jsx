@@ -4,8 +4,7 @@ import {
   Check,
   CheckCircle2,
   BriefcaseBusiness,
-  CarFront,
-  ChevronDown,
+  ChevronRight,
   Circle,
   CircleDollarSign,
   Copy,
@@ -17,11 +16,39 @@ import {
   RefreshCcw,
   Send,
   ShieldCheck,
+  Sparkles,
   UserRound,
-  X,
   UsersRound,
 } from 'lucide-react';
 
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion.jsx';
+import { Alert, AlertDescription } from '@/components/ui/alert.jsx';
+import { Badge } from '@/components/ui/badge.jsx';
+import { Button } from '@/components/ui/button.jsx';
+import { Card, CardContent } from '@/components/ui/card.jsx';
+import { Checkbox } from '@/components/ui/checkbox.jsx';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog.jsx';
+import { Input } from '@/components/ui/input.jsx';
+import { Label } from '@/components/ui/label.jsx';
+import { Progress } from '@/components/ui/progress.jsx';
+import { RadioCard, RadioGroup } from '@/components/ui/radio-group.jsx';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select.jsx';
+import { Separator } from '@/components/ui/separator.jsx';
+
+import { buscarEnderecoPorCep } from './services/cepApi.js';
 import { submitProposal } from './services/proposalApi.js';
 import {
   buildProposalPayload,
@@ -37,6 +64,7 @@ import {
   validateCPF,
 } from './utils/form.js';
 
+const ASSET = import.meta.env.BASE_URL;
 
 const initialForm = {
   nome: '',
@@ -46,6 +74,7 @@ const initialForm = {
   dataNascimento: '',
   nomeMae: '',
   nomePai: '',
+  cidadeNascimento: '',
   ufNascimento: '',
   email: '',
   temCnh: '',
@@ -53,6 +82,8 @@ const initialForm = {
   ruaResidencial: '',
   numeroResidencial: '',
   bairroResidencial: '',
+  cidadeResidencial: '',
+  ufResidencial: '',
   cepResidencial: '',
   tempoResidencia: '',
   telefoneFixoResidencial: '',
@@ -66,6 +97,8 @@ const initialForm = {
   enderecoEmpresa: '',
   numeroEmpresa: '',
   bairroEmpresa: '',
+  cidadeEmpresa: '',
+  ufEmpresa: '',
   cepEmpresa: '',
   telefoneEmpresa: '',
 
@@ -84,38 +117,77 @@ const initialForm = {
   website: '',
 };
 
-const requiredFields = [
-  'cpf',
-  'dataNascimento',
-  'temCnh',
+const requiredFields = ['cpf', 'dataNascimento', 'temCnh', 'celular', 'consentimento'];
+
+const CAMPOS_TELEFONE = [
+  'telefoneFixoResidencial',
   'celular',
-  'consentimento',
+  'telefoneEmpresa',
+  'referencia1Telefone',
+  'referencia2Telefone',
 ];
 
-function Field({ label, name, required, error, hint, className = '', children, ...props }) {
+const ESTADOS_CIVIS = ['Solteiro(a)', 'Casado(a)', 'União estável', 'Divorciado(a)', 'Viúvo(a)', 'Outro'];
+
+// Cada CEP preenche o bloco de endereço correspondente.
+const CAMPOS_POR_CEP = {
+  cepResidencial: {
+    logradouro: 'ruaResidencial',
+    bairro: 'bairroResidencial',
+    cidade: 'cidadeResidencial',
+    uf: 'ufResidencial',
+  },
+  cepEmpresa: {
+    logradouro: 'enderecoEmpresa',
+    bairro: 'bairroEmpresa',
+    cidade: 'cidadeEmpresa',
+    uf: 'ufEmpresa',
+  },
+};
+
+function Field({ label, name, required, error, hint, className = '', children }) {
   return (
-    <div className={`field ${className}`}>
-      <label htmlFor={name}>
-        {label} {required && <span className="required">*</span>}
-      </label>
-      {children || (
-        <input
-          id={name}
-          name={name}
-          aria-invalid={Boolean(error)}
-          aria-describedby={error ? `${name}-error` : undefined}
-          {...props}
-        />
-      )}
+    <div className={`flex flex-col gap-2 ${className}`}>
+      <Label htmlFor={name}>
+        {label}
+        {required && <span className="text-destructive">*</span>}
+      </Label>
+      {children}
       {hint && !error && (
-        <span className="field-hint">
-          <Lock size={12} aria-hidden="true" /> {hint}
+        <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
+          <Lock className="size-3" aria-hidden="true" /> {hint}
         </span>
       )}
       {error && (
-        <span className="field-error" id={`${name}-error`}>
+        <span className="text-xs font-semibold text-destructive" id={`${name}-error`}>
           {error}
         </span>
+      )}
+    </div>
+  );
+}
+
+/** Campo de CEP com indicador de busca automática do endereço. */
+function CepInput({ name, value, error, buscando, onChange }) {
+  return (
+    <div className="relative">
+      <Input
+        id={name}
+        name={name}
+        value={value}
+        onChange={onChange}
+        inputMode="numeric"
+        autoComplete="postal-code"
+        placeholder="00000-000"
+        className="pr-10"
+        aria-invalid={Boolean(error)}
+        aria-describedby={error ? `${name}-error` : undefined}
+      />
+      {buscando && (
+        <LoaderCircle
+          className="absolute top-1/2 right-3 size-4 -translate-y-1/2 animate-spin text-brand-strong"
+          aria-hidden="true"
+        />
       )}
     </div>
   );
@@ -124,47 +196,37 @@ function Field({ label, name, required, error, hint, className = '', children, .
 function SectionBadge({ pending = 0, complete = false, optional = false }) {
   if (pending > 0) {
     return (
-      <span className="section-badge pending">
+      <Badge variant="warning">
         {pending} obrigatório{pending > 1 ? 's' : ''}
-      </span>
+      </Badge>
     );
   }
   if (complete) {
     return (
-      <span className="section-badge complete">
-        <Check size={13} aria-hidden="true" /> Completo
-      </span>
+      <Badge variant="success">
+        <Check /> Completo
+      </Badge>
     );
   }
-  if (optional) return <span className="section-badge optional">Opcional</span>;
+  if (optional) return <Badge variant="outline">Opcional</Badge>;
   return null;
 }
 
-function Section({ icon: Icon, title, subtitle, badge, children, defaultOpen = true }) {
-  const [open, setOpen] = useState(defaultOpen);
-
+function FormSection({ value, icon: Icon, title, subtitle, badge, children }) {
   return (
-    <section className={`form-section ${open ? 'is-open' : ''}`}>
-      <button
-        className="section-heading"
-        type="button"
-        onClick={() => setOpen((current) => !current)}
-        aria-expanded={open}
-      >
-        <span className="section-icon" aria-hidden="true">
-          <Icon size={22} />
+    <AccordionItem value={value}>
+      <AccordionTrigger>
+        <span className="grid size-11 shrink-0 place-items-center rounded-xl bg-gradient-to-br from-brand/18 to-brand/5 text-brand-strong ring-1 ring-brand/20">
+          <Icon className="size-5.5" aria-hidden="true" />
         </span>
-        <span className="section-heading-copy">
-          <strong>{title}</strong>
-          <small>{subtitle}</small>
+        <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+          <strong className="font-display text-[1.02rem] tracking-tight">{title}</strong>
+          <small className="truncate text-[0.82rem] font-medium text-muted-foreground">{subtitle}</small>
         </span>
         {badge}
-        <ChevronDown className="section-chevron" size={20} />
-      </button>
-      <div className="section-content">
-        <div className="section-inner">{children}</div>
-      </div>
-    </section>
+      </AccordionTrigger>
+      <AccordionContent>{children}</AccordionContent>
+    </AccordionItem>
   );
 }
 
@@ -176,6 +238,7 @@ export default function App() {
   const [reviewOpen, setReviewOpen] = useState(false);
   const [result, setResult] = useState(null);
   const [protocolCopied, setProtocolCopied] = useState(false);
+  const [cepBuscando, setCepBuscando] = useState({});
   const confirmButtonRef = useRef(null);
 
   const progress = useMemo(() => {
@@ -218,46 +281,59 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    if (!reviewOpen) return undefined;
-
-    const previousOverflow = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
+    if (!reviewOpen) return;
     confirmButtonRef.current?.focus();
+  }, [reviewOpen]);
 
-    const closeOnEscape = (event) => {
-      if (event.key === 'Escape' && status !== 'submitting') setReviewOpen(false);
-    };
+  // Busca o endereço no ViaCEP e preenche rua, bairro, cidade e UF do bloco.
+  const preencherPeloCep = async (campoCep, cep) => {
+    const campos = CAMPOS_POR_CEP[campoCep];
+    setCepBuscando((atual) => ({ ...atual, [campoCep]: true }));
 
-    window.addEventListener('keydown', closeOnEscape);
-    return () => {
-      document.body.style.overflow = previousOverflow;
-      window.removeEventListener('keydown', closeOnEscape);
-    };
-  }, [reviewOpen, status]);
+    const endereco = await buscarEnderecoPorCep(cep);
 
-  const updateField = (event) => {
-    const { name, value, type, checked } = event.target;
-    let nextValue = type === 'checkbox' ? checked : value;
-
-    if (name === 'cpf') nextValue = maskCPF(value);
-    if (name === 'cnpjEmpresa') nextValue = maskCNPJ(value);
-    if (['cepResidencial', 'cepEmpresa'].includes(name)) nextValue = maskCEP(value);
-    if (
-      ['telefoneFixoResidencial', 'celular', 'telefoneEmpresa', 'referencia1Telefone', 'referencia2Telefone'].includes(name)
-    ) {
-      nextValue = maskPhone(value);
+    setCepBuscando((atual) => ({ ...atual, [campoCep]: false }));
+    if (!endereco) {
+      setErrors((current) => ({ ...current, [campoCep]: 'CEP não encontrado.' }));
+      return;
     }
-    if (name === 'rendaMensal') nextValue = maskCurrency(value);
-    if (name === 'ufNascimento') nextValue = value.toUpperCase().replace(/[^A-Z]/g, '').slice(0, 2);
+
+    setForm((current) => ({
+      ...current,
+      [campos.logradouro]: endereco.logradouro || current[campos.logradouro],
+      [campos.bairro]: endereco.bairro || current[campos.bairro],
+      [campos.cidade]: endereco.cidade,
+      [campos.uf]: endereco.uf,
+    }));
+  };
+
+  const setField = (name, rawValue) => {
+    let nextValue = rawValue;
+
+    if (name === 'cpf') nextValue = maskCPF(rawValue);
+    else if (name === 'cnpjEmpresa') nextValue = maskCNPJ(rawValue);
+    else if (name in CAMPOS_POR_CEP) nextValue = maskCEP(rawValue);
+    else if (name === 'rendaMensal') nextValue = maskCurrency(rawValue);
+    else if (CAMPOS_TELEFONE.includes(name)) nextValue = maskPhone(rawValue);
+    else if (name.startsWith('uf')) nextValue = rawValue.toUpperCase().replace(/[^A-Z]/g, '').slice(0, 2);
 
     setForm((current) => ({ ...current, [name]: nextValue }));
     setErrors((current) => ({ ...current, [name]: '' }));
     setNotice('');
 
+    if (name in CAMPOS_POR_CEP && onlyDigits(nextValue).length === 8) {
+      preencherPeloCep(name, nextValue);
+    }
+
     if (status === 'success' || status === 'error') {
       setStatus('idle');
       setResult(null);
     }
+  };
+
+  const updateField = (event) => {
+    const { name, value, type, checked } = event.target;
+    setField(name, type === 'checkbox' ? checked : value);
   };
 
   const validate = () => {
@@ -287,11 +363,11 @@ export default function App() {
       nextErrors.cnpjEmpresa = 'CNPJ inválido.';
     }
 
-    ['cepResidencial', 'cepEmpresa'].forEach((field) => {
+    Object.keys(CAMPOS_POR_CEP).forEach((field) => {
       if (form[field] && onlyDigits(form[field]).length !== 8) nextErrors[field] = 'CEP incompleto.';
     });
 
-    ['telefoneFixoResidencial', 'telefoneEmpresa', 'referencia1Telefone', 'referencia2Telefone'].forEach((field) => {
+    CAMPOS_TELEFONE.filter((field) => field !== 'celular').forEach((field) => {
       if (form[field] && onlyDigits(form[field]).length < 10) nextErrors[field] = 'Telefone incompleto.';
     });
 
@@ -309,6 +385,7 @@ export default function App() {
     setStatus('idle');
     setResult(null);
     setProtocolCopied(false);
+    setCepBuscando({});
     setReviewOpen(false);
   };
 
@@ -377,431 +454,818 @@ export default function App() {
   ];
 
   return (
-    <div className="app-shell">
-      <header className="topbar">
-        <a className="brand" href="#inicio" aria-label="Lopes Multimarcas">
-          <img className="brand-logo" src={`${import.meta.env.BASE_URL}lopes-multimarcas-logo.png`} alt="Lopes Multimarcas" />
-        </a>
-        <span className="secure-label"><ShieldCheck size={17} /> Ambiente seguro</span>
+    <div className="relative min-h-screen">
+      {/* Fundo fotográfico: showroom desfocado sob um véu escuro, para o conteúdo respirar. */}
+      <div className="pointer-events-none fixed inset-0 -z-10" aria-hidden="true">
+        <div
+          className="absolute inset-0 bg-cover bg-center bg-no-repeat"
+          style={{ backgroundImage: `url(${ASSET}hero-showroom.jpg)` }}
+        />
+        <div className="absolute inset-0 bg-gradient-to-b from-[#0b0f14]/88 via-[#0b0f14]/94 to-[#0b0f14]" />
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_78%_8%,color-mix(in_srgb,var(--brand)_28%,transparent),transparent_55%)]" />
+      </div>
+
+      <header className="sticky top-0 z-40 border-b border-white/10 bg-[#0b0f14]/95">
+        <div className="mx-auto flex h-[74px] max-w-[1320px] items-center justify-between px-5 sm:px-8">
+          <a href="#inicio" aria-label="Lopes Multimarcas" className="inline-flex items-center">
+            <img className="h-10 w-auto" src={`${ASSET}lopes-multimarcas-logo.png`} alt="Lopes Multimarcas" />
+          </a>
+          <span className="inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/5 px-3.5 py-1.5 text-[0.8rem] font-semibold text-white/85">
+            <ShieldCheck className="size-4 text-brand" /> Ambiente seguro
+          </span>
+        </div>
       </header>
 
-      <main id="inicio">
-        <section className="hero">
-          <div className="hero-content">
-            <span className="eyebrow">Simulação de financiamento</span>
-            <h1>Sua próxima conquista começa aqui.</h1>
-            <p>
-              Procedência, garantia e as melhores condições para você sair dirigindo hoje.
-              Preencha seus dados e nossa equipe encontra o financiamento ideal para o seu veículo.
-            </p>
-            <div className="hero-trust">
-              <span><BadgeCheck size={17} /> Análise personalizada</span>
-              <span><ShieldCheck size={17} /> Dados protegidos</span>
-              <span><Lock size={17} /> Conforme a LGPD</span>
-            </div>
-          </div>
-          <div className="hero-art" aria-hidden="true">
-            <div className="hero-orbit orbit-one" />
-            <div className="hero-orbit orbit-two" />
-            <CarFront size={118} strokeWidth={1.35} />
+      <main id="inicio" className="mx-auto max-w-[1320px] px-5 pb-16 sm:px-8">
+        <section className="relative py-14 text-white sm:py-20 lg:py-24">
+          <span className="inline-flex items-center gap-2 rounded-full border border-brand/35 bg-brand/12 px-3.5 py-1.5 text-[0.74rem] font-bold tracking-[0.18em] text-brand uppercase">
+            <Sparkles className="size-3.5" /> Simulação de financiamento
+          </span>
+          <h1 className="font-display mt-6 max-w-[16ch] text-[clamp(2.4rem,6vw,4.6rem)] leading-[1.02] font-extrabold tracking-[-0.045em]">
+            Sua próxima conquista{' '}
+            <span className="bg-gradient-to-r from-brand to-[#7fe0ff] bg-clip-text text-transparent">
+              começa aqui.
+            </span>
+          </h1>
+          <p className="mt-5 max-w-[58ch] text-[1.05rem] leading-relaxed text-white/72">
+            Procedência, garantia e as melhores condições para você sair dirigindo hoje. Preencha seus dados e nossa
+            equipe encontra o financiamento ideal para o seu veículo.
+          </p>
+          <div className="mt-8 flex flex-wrap gap-2.5">
+            {[
+              [BadgeCheck, 'Análise personalizada'],
+              [ShieldCheck, 'Dados protegidos'],
+              [Lock, 'Conforme a LGPD'],
+            ].map(([Icon, texto]) => (
+              <span
+                key={texto}
+                className="inline-flex items-center gap-2 rounded-full border border-white/12 bg-white/10 px-4 py-2 text-[0.86rem] font-semibold text-white/90"
+              >
+                <Icon className="size-4 text-brand" /> {texto}
+              </span>
+            ))}
           </div>
         </section>
 
-        <div className="content-grid">
-          <aside className="sidebar-card">
-            <span className="sidebar-kicker">Progresso da ficha</span>
-            <strong className="progress-value">{progress}%</strong>
-            <div className="progress-track" aria-label={`${progress}% preenchido`}>
-              <span style={{ width: `${progress}%` }} />
+        <div className="grid items-start gap-6 [&>*]:min-w-0 lg:grid-cols-[320px_minmax(0,1fr)]">
+          <aside className="glass-panel sticky top-[92px] hidden rounded-2xl border border-border/70 p-6 shadow-lift lg:block">
+            <span className="text-[0.72rem] font-bold tracking-[0.16em] text-muted-foreground uppercase">
+              Progresso da ficha
+            </span>
+            <div className="mt-2 flex items-end justify-between gap-3">
+              <strong className="font-display text-4xl leading-none tracking-tight">{progress}%</strong>
+              <span className="pb-1 text-xs font-semibold text-muted-foreground">
+                {requiredChecklist.filter(([, done]) => done).length} de {requiredChecklist.length}
+              </span>
             </div>
-            <p>Os campos marcados com <strong>*</strong> são obrigatórios.</p>
-            <ul className="sidebar-checklist">
+            <Progress className="mt-3" value={progress} aria-label={`${progress}% preenchido`} />
+
+            <ul className="mt-6 flex flex-col gap-2.5">
               {requiredChecklist.map(([label, done]) => (
-                <li key={label} className={done ? 'done' : ''}>
-                  {done ? <CheckCircle2 size={16} aria-hidden="true" /> : <Circle size={16} aria-hidden="true" />}
-                  <span>{label}</span>
+                <li
+                  key={label}
+                  className={`flex items-center gap-2.5 text-[0.88rem] font-medium transition-colors ${
+                    done ? 'text-foreground' : 'text-muted-foreground'
+                  }`}
+                >
+                  {done ? (
+                    <CheckCircle2 className="size-4 shrink-0 text-success" aria-hidden="true" />
+                  ) : (
+                    <Circle className="size-4 shrink-0 opacity-45" aria-hidden="true" />
+                  )}
+                  <span className={done ? 'line-through decoration-success/40' : ''}>{label}</span>
                 </li>
               ))}
             </ul>
-            <div className="sidebar-divider" />
-            <h2>Antes de começar</h2>
-            <p>Tenha em mãos seus documentos pessoais, dados de residência e informações profissionais.</p>
-            <div className="security-box">
-              <ShieldCheck size={22} />
-              <div>
-                <strong>Privacidade em primeiro lugar</strong>
-                <span>Seus dados são enviados de forma criptografada e usados somente para a análise do seu financiamento, conforme a LGPD.</span>
-              </div>
-            </div>
+
+            <Separator className="my-6" />
+
+            <h2 className="font-display text-base font-bold tracking-tight">Antes de começar</h2>
+            <p className="mt-2 text-[0.88rem] leading-relaxed text-muted-foreground">
+              Tenha em mãos seus documentos pessoais, dados de residência e informações profissionais.
+            </p>
+
+            <Alert variant="info" className="mt-5">
+              <ShieldCheck />
+              <AlertDescription>
+                Seus dados são enviados de forma criptografada e usados somente para a análise do seu financiamento,
+                conforme a LGPD.
+              </AlertDescription>
+            </Alert>
           </aside>
 
           {status === 'success' && result ? (
-            <div className="form-card success-panel" role="status">
-              <span className="success-panel-icon" aria-hidden="true">
-                <CheckCircle2 size={46} />
-              </span>
-              <h2>Ficha enviada com sucesso!</h2>
-              <p className="success-panel-lead">
-                Recebemos seus dados com segurança. Guarde o número de protocolo para acompanhar sua análise.
-              </p>
-              <div className="protocol-box">
+            <Card className="overflow-hidden" role="status">
+              <div className="bg-gradient-to-br from-success/12 to-transparent px-6 pt-10 pb-8 text-center sm:px-10">
+                <span className="mx-auto grid size-20 place-items-center rounded-full bg-success/12 text-success ring-8 ring-success/8">
+                  <CheckCircle2 className="size-11" aria-hidden="true" />
+                </span>
+                <h2 className="font-display mt-6 text-[1.9rem] leading-tight font-extrabold tracking-tight">
+                  Ficha enviada com sucesso!
+                </h2>
+                <p className="mx-auto mt-3 max-w-[52ch] leading-relaxed text-muted-foreground">
+                  Recebemos seus dados com segurança. Guarde o número de protocolo para acompanhar sua análise.
+                </p>
+              </div>
+
+              <CardContent className="flex flex-col gap-6 sm:px-10">
+                <div className="flex flex-wrap items-center justify-between gap-4 rounded-xl border border-dashed border-brand/40 bg-accent/50 px-5 py-4">
+                  <div className="flex flex-col gap-1">
+                    <span className="text-[0.72rem] font-bold tracking-[0.16em] text-muted-foreground uppercase">
+                      Protocolo
+                    </span>
+                    <strong className="font-display text-2xl tracking-tight">{result.protocolo}</strong>
+                  </div>
+                  <Button variant="secondary" type="button" onClick={copyProtocol}>
+                    {protocolCopied ? <Check /> : <Copy />}
+                    {protocolCopied ? 'Copiado!' : 'Copiar'}
+                  </Button>
+                </div>
+
+                {result.modoDemonstracao && (
+                  <Alert variant="warning">
+                    <AlertDescription>
+                      Ficha validada em modo de demonstração. Configure o banco de dados para realizar o envio real.
+                    </AlertDescription>
+                  </Alert>
+                )}
+
                 <div>
-                  <span className="protocol-label">Protocolo</span>
-                  <strong className="protocol-number">{result.protocolo}</strong>
+                  <h3 className="font-display text-base font-bold tracking-tight">Próximos passos</h3>
+                  <ol className="mt-4 flex flex-col gap-3">
+                    {[
+                      'Nossa equipe analisa suas informações junto às instituições parceiras.',
+                      'Entramos em contato pelo celular informado em até 1 dia útil.',
+                      'Você recebe as melhores condições para sair dirigindo.',
+                    ].map((passo, indice) => (
+                      <li key={passo} className="flex gap-3 text-[0.92rem] leading-relaxed text-muted-foreground">
+                        <span className="mt-0.5 grid size-6 shrink-0 place-items-center rounded-full bg-brand/12 text-[0.75rem] font-bold text-brand-strong">
+                          {indice + 1}
+                        </span>
+                        {passo}
+                      </li>
+                    ))}
+                  </ol>
                 </div>
-                <button className="button button-secondary" type="button" onClick={copyProtocol}>
-                  {protocolCopied ? <Check size={17} /> : <Copy size={17} />}
-                  {protocolCopied ? 'Copiado!' : 'Copiar'}
-                </button>
-              </div>
-              {result.modoDemonstracao && (
-                <div className="notice" role="status">
-                  Ficha validada em modo de demonstração. Configure o banco de dados para realizar o envio real.
-                </div>
-              )}
-              <div className="success-steps">
-                <h3>Próximos passos</h3>
-                <ol>
-                  <li>Nossa equipe analisa suas informações junto às instituições parceiras.</li>
-                  <li>Entramos em contato pelo celular informado em até 1 dia útil.</li>
-                  <li>Você recebe as melhores condições para sair dirigindo.</li>
-                </ol>
-              </div>
-              <div className="success-actions">
-                <button className="button button-primary" type="button" onClick={resetForm}>
-                  <RefreshCcw size={18} /> Preencher nova ficha
-                </button>
-              </div>
-            </div>
+
+                <Button variant="brand" size="lg" type="button" onClick={resetForm} className="self-start">
+                  <RefreshCcw /> Preencher nova ficha
+                </Button>
+              </CardContent>
+            </Card>
           ) : (
-          <form className="form-card" onSubmit={handleSubmit} noValidate>
-            <div className="form-intro">
-              <div>
-                <span className="eyebrow dark">Ficha cadastral</span>
-                <h2>Conte um pouco sobre você</h2>
+            <form onSubmit={handleSubmit} noValidate className="flex flex-col gap-4">
+              <Card className="overflow-hidden">
+                <div className="flex flex-wrap items-center justify-between gap-4 border-b border-border bg-gradient-to-br from-accent/70 to-transparent px-6 py-6">
+                  <div>
+                    <span className="text-[0.72rem] font-bold tracking-[0.16em] text-brand-strong uppercase">
+                      Ficha cadastral
+                    </span>
+                    <h2 className="font-display mt-1.5 text-2xl leading-tight font-extrabold tracking-tight">
+                      Conte um pouco sobre você
+                    </h2>
+                  </div>
+                  <Badge variant="brand" className="px-3.5 py-1.5 text-[0.8rem]">
+                    <CircleDollarSign /> Financiamento
+                  </Badge>
+                </div>
+
+                <div className="px-6 py-5 lg:hidden">
+                  <div className="flex items-center justify-between gap-3">
+                    <span className="text-[0.78rem] font-bold text-muted-foreground">Progresso da ficha</span>
+                    <strong className="font-display text-lg">{progress}%</strong>
+                  </div>
+                  <Progress className="mt-2" value={progress} aria-label={`${progress}% preenchido`} />
+                </div>
+              </Card>
+
+              <div className="sr-only" aria-hidden="true">
+                <label htmlFor="website">Não preencha este campo</label>
+                <input
+                  id="website"
+                  name="website"
+                  value={form.website}
+                  onChange={updateField}
+                  tabIndex={-1}
+                  autoComplete="off"
+                />
               </div>
-              <span className="form-badge"><CircleDollarSign size={18} /> Financiamento</span>
-            </div>
 
-            <div className="honeypot" aria-hidden="true">
-              <label htmlFor="website">Não preencha este campo</label>
-              <input
-                id="website"
-                name="website"
-                value={form.website}
-                onChange={updateField}
-                tabIndex={-1}
-                autoComplete="off"
-              />
-            </div>
+              <Accordion
+                type="multiple"
+                defaultValue={['pessoais', 'residenciais']}
+                className="flex flex-col gap-4"
+              >
+                <FormSection
+                  value="pessoais"
+                  icon={UserRound}
+                  title="Dados pessoais"
+                  subtitle="Informações de identificação do cliente"
+                  badge={<SectionBadge {...sectionStatus.pessoais} />}
+                >
+                  <div className="grid gap-5 sm:grid-cols-2">
+                    <Field label="Nome completo" name="nome" className="sm:col-span-2">
+                      <Input
+                        id="nome"
+                        name="nome"
+                        value={form.nome}
+                        onChange={updateField}
+                        autoComplete="name"
+                        placeholder="Digite seu nome completo"
+                      />
+                    </Field>
+                    <Field label="RG" name="rg">
+                      <Input id="rg" name="rg" value={form.rg} onChange={updateField} placeholder="00.000.000-0" />
+                    </Field>
+                    <Field
+                      label="CPF"
+                      name="cpf"
+                      required
+                      error={errors.cpf}
+                      hint="Usado somente para a análise de crédito."
+                    >
+                      <Input
+                        id="cpf"
+                        name="cpf"
+                        value={form.cpf}
+                        onChange={updateField}
+                        inputMode="numeric"
+                        placeholder="000.000.000-00"
+                        aria-invalid={Boolean(errors.cpf)}
+                        aria-describedby={errors.cpf ? 'cpf-error' : undefined}
+                      />
+                    </Field>
+                    <Field label="Estado civil" name="estadoCivil">
+                      <Select
+                        value={form.estadoCivil}
+                        onValueChange={(valor) => setField('estadoCivil', valor)}
+                      >
+                        <SelectTrigger id="estadoCivil" aria-label="Estado civil">
+                          <SelectValue placeholder="Selecione" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {ESTADOS_CIVIS.map((opcao) => (
+                            <SelectItem key={opcao} value={opcao}>
+                              {opcao}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </Field>
+                    <Field label="Data de nascimento" name="dataNascimento" required error={errors.dataNascimento}>
+                      <Input
+                        id="dataNascimento"
+                        name="dataNascimento"
+                        type="date"
+                        max={maxBirthDate}
+                        value={form.dataNascimento}
+                        onChange={updateField}
+                        aria-invalid={Boolean(errors.dataNascimento)}
+                        aria-describedby={errors.dataNascimento ? 'dataNascimento-error' : undefined}
+                      />
+                    </Field>
+                    <Field label="Nome da mãe" name="nomeMae" className="sm:col-span-2">
+                      <Input
+                        id="nomeMae"
+                        name="nomeMae"
+                        value={form.nomeMae}
+                        onChange={updateField}
+                        placeholder="Nome completo"
+                      />
+                    </Field>
+                    <Field label="Nome do pai" name="nomePai" className="sm:col-span-2">
+                      <Input
+                        id="nomePai"
+                        name="nomePai"
+                        value={form.nomePai}
+                        onChange={updateField}
+                        placeholder="Nome completo"
+                      />
+                    </Field>
+                    <Field label="Cidade de nascimento" name="cidadeNascimento">
+                      <Input
+                        id="cidadeNascimento"
+                        name="cidadeNascimento"
+                        value={form.cidadeNascimento}
+                        onChange={updateField}
+                        placeholder="Cidade onde nasceu"
+                      />
+                    </Field>
+                    <Field label="UF de nascimento" name="ufNascimento">
+                      <Input
+                        id="ufNascimento"
+                        name="ufNascimento"
+                        value={form.ufNascimento}
+                        onChange={updateField}
+                        placeholder="SP"
+                        maxLength={2}
+                      />
+                    </Field>
+                    <Field label="E-mail" name="email" error={errors.email} className="sm:col-span-2">
+                      <Input
+                        id="email"
+                        name="email"
+                        type="email"
+                        value={form.email}
+                        onChange={updateField}
+                        autoComplete="email"
+                        placeholder="voce@exemplo.com"
+                        aria-invalid={Boolean(errors.email)}
+                        aria-describedby={errors.email ? 'email-error' : undefined}
+                      />
+                    </Field>
+                    <Field label="Possui CNH?" name="temCnh" required error={errors.temCnh} className="sm:col-span-2">
+                      <RadioGroup
+                        className="flex flex-wrap gap-3"
+                        value={form.temCnh}
+                        onValueChange={(valor) => setField('temCnh', valor)}
+                        aria-label="Possui CNH?"
+                        aria-invalid={Boolean(errors.temCnh)}
+                        aria-describedby={errors.temCnh ? 'temCnh-error' : undefined}
+                      >
+                        {['Sim', 'Não'].map((opcao) => (
+                          <RadioCard key={opcao} value={opcao} id={`cnh-${opcao}`}>
+                            {opcao}
+                          </RadioCard>
+                        ))}
+                      </RadioGroup>
+                    </Field>
+                  </div>
+                </FormSection>
 
-            <Section
-              icon={UserRound}
-              title="Dados pessoais"
-              subtitle="Informações de identificação do cliente"
-              badge={<SectionBadge {...sectionStatus.pessoais} />}
-            >
-              <div className="fields-grid">
-                <Field label="Nome completo" name="nome" className="span-2">
-                  <input id="nome" name="nome" value={form.nome} onChange={updateField} autoComplete="name" placeholder="Digite seu nome completo" />
-                </Field>
-                <Field label="RG" name="rg">
-                  <input id="rg" name="rg" value={form.rg} onChange={updateField} placeholder="00.000.000-0" />
-                </Field>
-                <Field label="CPF" name="cpf" required error={errors.cpf} hint="Usado somente para a análise de crédito.">
-                  <input id="cpf" name="cpf" value={form.cpf} onChange={updateField} inputMode="numeric" placeholder="000.000.000-00" aria-invalid={Boolean(errors.cpf)} aria-describedby={errors.cpf ? 'cpf-error' : undefined} />
-                </Field>
-                <Field label="Estado civil" name="estadoCivil">
-                  <select id="estadoCivil" name="estadoCivil" value={form.estadoCivil} onChange={updateField}>
-                    <option value="">Selecione</option>
-                    <option>Solteiro(a)</option>
-                    <option>Casado(a)</option>
-                    <option>União estável</option>
-                    <option>Divorciado(a)</option>
-                    <option>Viúvo(a)</option>
-                    <option>Outro</option>
-                  </select>
-                </Field>
-                <Field label="Data de nascimento" name="dataNascimento" required error={errors.dataNascimento}>
-                  <input id="dataNascimento" name="dataNascimento" type="date" max={maxBirthDate} value={form.dataNascimento} onChange={updateField} aria-invalid={Boolean(errors.dataNascimento)} aria-describedby={errors.dataNascimento ? 'dataNascimento-error' : undefined} />
-                </Field>
-                <Field label="Nome da mãe" name="nomeMae" className="span-2">
-                  <input id="nomeMae" name="nomeMae" value={form.nomeMae} onChange={updateField} placeholder="Nome completo" />
-                </Field>
-                <Field label="Nome do pai" name="nomePai" className="span-2">
-                  <input id="nomePai" name="nomePai" value={form.nomePai} onChange={updateField} placeholder="Nome completo" />
-                </Field>
-                <Field label="UF de nascimento" name="ufNascimento">
-                  <input id="ufNascimento" name="ufNascimento" value={form.ufNascimento} onChange={updateField} placeholder="SP" maxLength={2} />
-                </Field>
-                <Field label="E-mail" name="email" error={errors.email} className="span-2">
-                  <input id="email" name="email" type="email" value={form.email} onChange={updateField} autoComplete="email" placeholder="voce@exemplo.com" aria-invalid={Boolean(errors.email)} aria-describedby={errors.email ? 'email-error' : undefined} />
-                </Field>
-                <Field label="Possui CNH?" name="temCnh" required error={errors.temCnh} className="span-2">
-                  <div className="choice-group" role="radiogroup" aria-label="Possui CNH?" aria-invalid={Boolean(errors.temCnh)} aria-describedby={errors.temCnh ? 'temCnh-error' : undefined}>
-                    {['Sim', 'Não'].map((option) => (
-                      <label className={`choice-card ${form.temCnh === option ? 'selected' : ''}`} key={option}>
-                        <input type="radio" name="temCnh" value={option} checked={form.temCnh === option} onChange={updateField} aria-invalid={Boolean(errors.temCnh)} />
-                        <span>{option}</span>
-                      </label>
+                <FormSection
+                  value="residenciais"
+                  icon={MapPinHouse}
+                  title="Dados residenciais"
+                  subtitle="Endereço e formas de contato"
+                  badge={<SectionBadge {...sectionStatus.residenciais} />}
+                >
+                  <div className="grid gap-5 sm:grid-cols-2">
+                    <Field
+                      label="CEP"
+                      name="cepResidencial"
+                      error={errors.cepResidencial}
+                      hint="Preenchemos rua, bairro, cidade e UF automaticamente."
+                    >
+                      <CepInput
+                        name="cepResidencial"
+                        value={form.cepResidencial}
+                        error={errors.cepResidencial}
+                        buscando={cepBuscando.cepResidencial}
+                        onChange={updateField}
+                      />
+                    </Field>
+                    <Field label="Número" name="numeroResidencial">
+                      <Input
+                        id="numeroResidencial"
+                        name="numeroResidencial"
+                        value={form.numeroResidencial}
+                        onChange={updateField}
+                        placeholder="123"
+                      />
+                    </Field>
+                    <Field label="Rua / Avenida" name="ruaResidencial" className="sm:col-span-2">
+                      <Input
+                        id="ruaResidencial"
+                        name="ruaResidencial"
+                        value={form.ruaResidencial}
+                        onChange={updateField}
+                        autoComplete="street-address"
+                        placeholder="Nome da rua"
+                      />
+                    </Field>
+                    <Field label="Bairro" name="bairroResidencial">
+                      <Input
+                        id="bairroResidencial"
+                        name="bairroResidencial"
+                        value={form.bairroResidencial}
+                        onChange={updateField}
+                        placeholder="Bairro"
+                      />
+                    </Field>
+                    <div className="grid grid-cols-[minmax(0,1fr)_5.5rem] gap-4">
+                      <Field label="Cidade" name="cidadeResidencial">
+                        <Input
+                          id="cidadeResidencial"
+                          name="cidadeResidencial"
+                          value={form.cidadeResidencial}
+                          onChange={updateField}
+                          placeholder="Cidade"
+                        />
+                      </Field>
+                      <Field label="UF" name="ufResidencial">
+                        <Input
+                          id="ufResidencial"
+                          name="ufResidencial"
+                          value={form.ufResidencial}
+                          onChange={updateField}
+                          placeholder="SP"
+                          maxLength={2}
+                        />
+                      </Field>
+                    </div>
+                    <Field label="Tempo de residência" name="tempoResidencia">
+                      <Input
+                        id="tempoResidencia"
+                        name="tempoResidencia"
+                        value={form.tempoResidencia}
+                        onChange={updateField}
+                        placeholder="Ex.: 3 anos"
+                      />
+                    </Field>
+                    <Field label="Telefone fixo" name="telefoneFixoResidencial" error={errors.telefoneFixoResidencial}>
+                      <Input
+                        id="telefoneFixoResidencial"
+                        name="telefoneFixoResidencial"
+                        value={form.telefoneFixoResidencial}
+                        onChange={updateField}
+                        inputMode="tel"
+                        placeholder="(00) 0000-0000"
+                        aria-invalid={Boolean(errors.telefoneFixoResidencial)}
+                        aria-describedby={
+                          errors.telefoneFixoResidencial ? 'telefoneFixoResidencial-error' : undefined
+                        }
+                      />
+                    </Field>
+                    <Field label="Telefone celular" name="celular" required error={errors.celular}>
+                      <Input
+                        id="celular"
+                        name="celular"
+                        value={form.celular}
+                        onChange={updateField}
+                        inputMode="tel"
+                        autoComplete="tel"
+                        placeholder="(00) 00000-0000"
+                        aria-invalid={Boolean(errors.celular)}
+                        aria-describedby={errors.celular ? 'celular-error' : undefined}
+                      />
+                    </Field>
+                  </div>
+                </FormSection>
+
+                <FormSection
+                  value="profissionais"
+                  icon={BriefcaseBusiness}
+                  title="Dados profissionais"
+                  subtitle="Empresa, ocupação e renda mensal"
+                  badge={<SectionBadge {...sectionStatus.profissionais} />}
+                >
+                  <div className="grid gap-5 sm:grid-cols-2">
+                    <Field label="Nome da empresa" name="nomeEmpresa" className="sm:col-span-2">
+                      <Input
+                        id="nomeEmpresa"
+                        name="nomeEmpresa"
+                        value={form.nomeEmpresa}
+                        onChange={updateField}
+                        placeholder="Razão social ou nome fantasia"
+                      />
+                    </Field>
+                    <Field label="Cargo / Função" name="cargo">
+                      <Input id="cargo" name="cargo" value={form.cargo} onChange={updateField} placeholder="Sua função" />
+                    </Field>
+                    <Field label="Tempo de empresa" name="tempoEmpresa">
+                      <Input
+                        id="tempoEmpresa"
+                        name="tempoEmpresa"
+                        value={form.tempoEmpresa}
+                        onChange={updateField}
+                        placeholder="Ex.: 2 anos"
+                      />
+                    </Field>
+                    <Field label="Renda mensal" name="rendaMensal" hint="Usada apenas para dimensionar as parcelas.">
+                      <Input
+                        id="rendaMensal"
+                        name="rendaMensal"
+                        value={form.rendaMensal}
+                        onChange={updateField}
+                        inputMode="numeric"
+                        placeholder="R$ 0,00"
+                      />
+                    </Field>
+                    <Field label="CNPJ" name="cnpjEmpresa" error={errors.cnpjEmpresa}>
+                      <Input
+                        id="cnpjEmpresa"
+                        name="cnpjEmpresa"
+                        value={form.cnpjEmpresa}
+                        onChange={updateField}
+                        inputMode="numeric"
+                        placeholder="00.000.000/0000-00"
+                        aria-invalid={Boolean(errors.cnpjEmpresa)}
+                        aria-describedby={errors.cnpjEmpresa ? 'cnpjEmpresa-error' : undefined}
+                      />
+                    </Field>
+                    <Field
+                      label="CEP"
+                      name="cepEmpresa"
+                      error={errors.cepEmpresa}
+                      hint="Preenchemos o endereço automaticamente."
+                    >
+                      <CepInput
+                        name="cepEmpresa"
+                        value={form.cepEmpresa}
+                        error={errors.cepEmpresa}
+                        buscando={cepBuscando.cepEmpresa}
+                        onChange={updateField}
+                      />
+                    </Field>
+                    <Field label="Número" name="numeroEmpresa">
+                      <Input
+                        id="numeroEmpresa"
+                        name="numeroEmpresa"
+                        value={form.numeroEmpresa}
+                        onChange={updateField}
+                        placeholder="123"
+                      />
+                    </Field>
+                    <Field label="Endereço da empresa" name="enderecoEmpresa" className="sm:col-span-2">
+                      <Input
+                        id="enderecoEmpresa"
+                        name="enderecoEmpresa"
+                        value={form.enderecoEmpresa}
+                        onChange={updateField}
+                        placeholder="Rua / Avenida"
+                      />
+                    </Field>
+                    <Field label="Bairro" name="bairroEmpresa">
+                      <Input
+                        id="bairroEmpresa"
+                        name="bairroEmpresa"
+                        value={form.bairroEmpresa}
+                        onChange={updateField}
+                        placeholder="Bairro"
+                      />
+                    </Field>
+                    <div className="grid grid-cols-[minmax(0,1fr)_5.5rem] gap-4">
+                      <Field label="Cidade" name="cidadeEmpresa">
+                        <Input
+                          id="cidadeEmpresa"
+                          name="cidadeEmpresa"
+                          value={form.cidadeEmpresa}
+                          onChange={updateField}
+                          placeholder="Cidade"
+                        />
+                      </Field>
+                      <Field label="UF" name="ufEmpresa">
+                        <Input
+                          id="ufEmpresa"
+                          name="ufEmpresa"
+                          value={form.ufEmpresa}
+                          onChange={updateField}
+                          placeholder="SP"
+                          maxLength={2}
+                        />
+                      </Field>
+                    </div>
+                    <Field label="Telefone fixo" name="telefoneEmpresa" error={errors.telefoneEmpresa}>
+                      <Input
+                        id="telefoneEmpresa"
+                        name="telefoneEmpresa"
+                        value={form.telefoneEmpresa}
+                        onChange={updateField}
+                        inputMode="tel"
+                        placeholder="(00) 0000-0000"
+                        aria-invalid={Boolean(errors.telefoneEmpresa)}
+                        aria-describedby={errors.telefoneEmpresa ? 'telefoneEmpresa-error' : undefined}
+                      />
+                    </Field>
+                  </div>
+                </FormSection>
+
+                <FormSection
+                  value="bancarios"
+                  icon={Landmark}
+                  title="Dados bancários"
+                  subtitle="Relacionamento bancário do cliente"
+                  badge={<SectionBadge {...sectionStatus.bancarios} />}
+                >
+                  <Alert variant="info" className="mb-5">
+                    <Lock />
+                    <AlertDescription>
+                      <span>
+                        <strong>Campos opcionais</strong> que ajudam a acelerar sua aprovação. Nunca solicitamos senhas,
+                        números de cartão ou códigos de segurança.
+                      </span>
+                    </AlertDescription>
+                  </Alert>
+                  <div className="grid gap-5 sm:grid-cols-3">
+                    <Field label="Banco" name="banco">
+                      <Input
+                        id="banco"
+                        name="banco"
+                        value={form.banco}
+                        onChange={updateField}
+                        placeholder="Nome ou código"
+                      />
+                    </Field>
+                    <Field label="Agência" name="agencia">
+                      <Input id="agencia" name="agencia" value={form.agencia} onChange={updateField} placeholder="0000" />
+                    </Field>
+                    <Field label="Conta" name="conta">
+                      <Input id="conta" name="conta" value={form.conta} onChange={updateField} placeholder="00000-0" />
+                    </Field>
+                  </div>
+                </FormSection>
+
+                <FormSection
+                  value="referencias"
+                  icon={UsersRound}
+                  title="Referências pessoais"
+                  subtitle="Duas pessoas que possam confirmar seus dados"
+                  badge={<SectionBadge {...sectionStatus.referencias} />}
+                >
+                  <div className="flex flex-col gap-4">
+                    {[
+                      { numero: '01', nome: 'referencia1Nome', parentesco: 'referencia1Parentesco', telefone: 'referencia1Telefone', exemplo: 'Ex.: irmão, amigo' },
+                      { numero: '02', nome: 'referencia2Nome', parentesco: 'referencia2Parentesco', telefone: 'referencia2Telefone', exemplo: 'Ex.: irmã, colega' },
+                    ].map((ref) => (
+                      <div key={ref.numero} className="relative rounded-xl border border-border bg-secondary/40 p-5 pt-8">
+                        <span className="absolute -top-3 left-5 rounded-md bg-brand-strong px-2.5 py-1 text-[0.7rem] font-bold text-white">
+                          {ref.numero}
+                        </span>
+                        <div className="grid gap-5 sm:grid-cols-3">
+                          <Field label="Nome" name={ref.nome}>
+                            <Input
+                              id={ref.nome}
+                              name={ref.nome}
+                              value={form[ref.nome]}
+                              onChange={updateField}
+                              placeholder="Nome completo"
+                            />
+                          </Field>
+                          <Field label="Parentesco" name={ref.parentesco}>
+                            <Input
+                              id={ref.parentesco}
+                              name={ref.parentesco}
+                              value={form[ref.parentesco]}
+                              onChange={updateField}
+                              placeholder={ref.exemplo}
+                            />
+                          </Field>
+                          <Field label="Telefone" name={ref.telefone} error={errors[ref.telefone]}>
+                            <Input
+                              id={ref.telefone}
+                              name={ref.telefone}
+                              value={form[ref.telefone]}
+                              onChange={updateField}
+                              inputMode="tel"
+                              placeholder="(00) 00000-0000"
+                              aria-invalid={Boolean(errors[ref.telefone])}
+                              aria-describedby={errors[ref.telefone] ? `${ref.telefone}-error` : undefined}
+                            />
+                          </Field>
+                        </div>
+                      </div>
                     ))}
                   </div>
-                </Field>
-              </div>
-            </Section>
+                </FormSection>
+              </Accordion>
 
-            <Section
-              icon={MapPinHouse}
-              title="Dados residenciais"
-              subtitle="Endereço e formas de contato"
-              badge={<SectionBadge {...sectionStatus.residenciais} />}
-            >
-              <div className="fields-grid">
-                <Field label="Rua / Avenida" name="ruaResidencial" className="span-2">
-                  <input id="ruaResidencial" name="ruaResidencial" value={form.ruaResidencial} onChange={updateField} autoComplete="street-address" placeholder="Nome da rua" />
-                </Field>
-                <Field label="Número" name="numeroResidencial">
-                  <input id="numeroResidencial" name="numeroResidencial" value={form.numeroResidencial} onChange={updateField} placeholder="123" />
-                </Field>
-                <Field label="Bairro" name="bairroResidencial">
-                  <input id="bairroResidencial" name="bairroResidencial" value={form.bairroResidencial} onChange={updateField} placeholder="Bairro" />
-                </Field>
-                <Field label="CEP" name="cepResidencial" error={errors.cepResidencial}>
-                  <input id="cepResidencial" name="cepResidencial" value={form.cepResidencial} onChange={updateField} inputMode="numeric" autoComplete="postal-code" placeholder="00000-000" aria-invalid={Boolean(errors.cepResidencial)} aria-describedby={errors.cepResidencial ? 'cepResidencial-error' : undefined} />
-                </Field>
-                <Field label="Tempo de residência" name="tempoResidencia">
-                  <input id="tempoResidencia" name="tempoResidencia" value={form.tempoResidencia} onChange={updateField} placeholder="Ex.: 3 anos" />
-                </Field>
-                <Field label="Telefone fixo" name="telefoneFixoResidencial" error={errors.telefoneFixoResidencial}>
-                  <input id="telefoneFixoResidencial" name="telefoneFixoResidencial" value={form.telefoneFixoResidencial} onChange={updateField} inputMode="tel" placeholder="(00) 0000-0000" aria-invalid={Boolean(errors.telefoneFixoResidencial)} aria-describedby={errors.telefoneFixoResidencial ? 'telefoneFixoResidencial-error' : undefined} />
-                </Field>
-                <Field label="Telefone celular" name="celular" required error={errors.celular}>
-                  <input id="celular" name="celular" value={form.celular} onChange={updateField} inputMode="tel" autoComplete="tel" placeholder="(00) 00000-0000" aria-invalid={Boolean(errors.celular)} aria-describedby={errors.celular ? 'celular-error' : undefined} />
-                </Field>
-              </div>
-            </Section>
+              <Card className={errors.consentimento ? 'border-destructive/60' : ''}>
+                <CardContent className="flex flex-col gap-4">
+                  <div className="flex items-center gap-2.5 font-bold">
+                    <ShieldCheck className="size-5 text-brand-strong" aria-hidden="true" />
+                    Privacidade e proteção de dados
+                  </div>
 
-            <Section
-              icon={BriefcaseBusiness}
-              title="Dados profissionais"
-              subtitle="Empresa, ocupação e renda mensal"
-              badge={<SectionBadge {...sectionStatus.profissionais} />}
-              defaultOpen={false}
-            >
-              <div className="fields-grid">
-                <Field label="Nome da empresa" name="nomeEmpresa" className="span-2">
-                  <input id="nomeEmpresa" name="nomeEmpresa" value={form.nomeEmpresa} onChange={updateField} placeholder="Razão social ou nome fantasia" />
-                </Field>
-                <Field label="Cargo / Função" name="cargo">
-                  <input id="cargo" name="cargo" value={form.cargo} onChange={updateField} placeholder="Sua função" />
-                </Field>
-                <Field label="Tempo de empresa" name="tempoEmpresa">
-                  <input id="tempoEmpresa" name="tempoEmpresa" value={form.tempoEmpresa} onChange={updateField} placeholder="Ex.: 2 anos" />
-                </Field>
-                <Field label="Renda mensal" name="rendaMensal" hint="Usada apenas para dimensionar as parcelas.">
-                  <input id="rendaMensal" name="rendaMensal" value={form.rendaMensal} onChange={updateField} inputMode="numeric" placeholder="R$ 0,00" />
-                </Field>
-                <Field label="CNPJ" name="cnpjEmpresa" error={errors.cnpjEmpresa}>
-                  <input id="cnpjEmpresa" name="cnpjEmpresa" value={form.cnpjEmpresa} onChange={updateField} inputMode="numeric" placeholder="00.000.000/0000-00" aria-invalid={Boolean(errors.cnpjEmpresa)} aria-describedby={errors.cnpjEmpresa ? 'cnpjEmpresa-error' : undefined} />
-                </Field>
-                <Field label="Endereço da empresa" name="enderecoEmpresa" className="span-2">
-                  <input id="enderecoEmpresa" name="enderecoEmpresa" value={form.enderecoEmpresa} onChange={updateField} placeholder="Rua / Avenida" />
-                </Field>
-                <Field label="Número" name="numeroEmpresa">
-                  <input id="numeroEmpresa" name="numeroEmpresa" value={form.numeroEmpresa} onChange={updateField} placeholder="123" />
-                </Field>
-                <Field label="Bairro" name="bairroEmpresa">
-                  <input id="bairroEmpresa" name="bairroEmpresa" value={form.bairroEmpresa} onChange={updateField} placeholder="Bairro" />
-                </Field>
-                <Field label="CEP" name="cepEmpresa" error={errors.cepEmpresa}>
-                  <input id="cepEmpresa" name="cepEmpresa" value={form.cepEmpresa} onChange={updateField} inputMode="numeric" placeholder="00000-000" aria-invalid={Boolean(errors.cepEmpresa)} aria-describedby={errors.cepEmpresa ? 'cepEmpresa-error' : undefined} />
-                </Field>
-                <Field label="Telefone fixo" name="telefoneEmpresa" error={errors.telefoneEmpresa}>
-                  <input id="telefoneEmpresa" name="telefoneEmpresa" value={form.telefoneEmpresa} onChange={updateField} inputMode="tel" placeholder="(00) 0000-0000" aria-invalid={Boolean(errors.telefoneEmpresa)} aria-describedby={errors.telefoneEmpresa ? 'telefoneEmpresa-error' : undefined} />
-                </Field>
-              </div>
-            </Section>
+                  <label className="flex cursor-pointer items-start gap-3 rounded-xl border border-border bg-secondary/40 p-4 transition-colors hover:border-brand/40">
+                    <Checkbox
+                      id="consentimento"
+                      name="consentimento"
+                      className="mt-0.5"
+                      checked={form.consentimento}
+                      onCheckedChange={(marcado) => setField('consentimento', marcado === true)}
+                      aria-invalid={Boolean(errors.consentimento)}
+                      aria-describedby={errors.consentimento ? 'consentimento-error' : undefined}
+                    />
+                    <span className="text-[0.9rem] leading-relaxed">
+                      {CONSENT_TEXT}
+                      <strong className="text-destructive"> *</strong>
+                    </span>
+                  </label>
 
-            <Section
-              icon={Landmark}
-              title="Dados bancários"
-              subtitle="Relacionamento bancário do cliente"
-              badge={<SectionBadge {...sectionStatus.bancarios} />}
-              defaultOpen={false}
-            >
-              <div className="section-note">
-                <Lock size={16} aria-hidden="true" />
-                <span>
-                  <strong>Campos opcionais</strong> que ajudam a acelerar sua aprovação.
-                  Nunca solicitamos senhas, números de cartão ou códigos de segurança.
-                </span>
-              </div>
-              <div className="fields-grid three-columns">
-                <Field label="Banco" name="banco">
-                  <input id="banco" name="banco" value={form.banco} onChange={updateField} placeholder="Nome ou código" />
-                </Field>
-                <Field label="Agência" name="agencia">
-                  <input id="agencia" name="agencia" value={form.agencia} onChange={updateField} placeholder="0000" />
-                </Field>
-                <Field label="Conta" name="conta">
-                  <input id="conta" name="conta" value={form.conta} onChange={updateField} placeholder="00000-0" />
-                </Field>
-              </div>
-            </Section>
+                  {errors.consentimento && (
+                    <span className="text-xs font-semibold text-destructive" id="consentimento-error">
+                      {errors.consentimento}
+                    </span>
+                  )}
 
-            <Section
-              icon={UsersRound}
-              title="Referências pessoais"
-              subtitle="Duas pessoas que possam confirmar seus dados"
-              badge={<SectionBadge {...sectionStatus.referencias} />}
-              defaultOpen={false}
-            >
-              <div className="reference-card">
-                <span className="reference-number">01</span>
-                <div className="fields-grid three-columns">
-                  <Field label="Nome" name="referencia1Nome">
-                    <input id="referencia1Nome" name="referencia1Nome" value={form.referencia1Nome} onChange={updateField} placeholder="Nome completo" />
-                  </Field>
-                  <Field label="Parentesco" name="referencia1Parentesco">
-                    <input id="referencia1Parentesco" name="referencia1Parentesco" value={form.referencia1Parentesco} onChange={updateField} placeholder="Ex.: irmão, amigo" />
-                  </Field>
-                  <Field label="Telefone" name="referencia1Telefone" error={errors.referencia1Telefone}>
-                    <input id="referencia1Telefone" name="referencia1Telefone" value={form.referencia1Telefone} onChange={updateField} inputMode="tel" placeholder="(00) 00000-0000" aria-invalid={Boolean(errors.referencia1Telefone)} aria-describedby={errors.referencia1Telefone ? 'referencia1Telefone-error' : undefined} />
-                  </Field>
-                </div>
-              </div>
-              <div className="reference-card">
-                <span className="reference-number">02</span>
-                <div className="fields-grid three-columns">
-                  <Field label="Nome" name="referencia2Nome">
-                    <input id="referencia2Nome" name="referencia2Nome" value={form.referencia2Nome} onChange={updateField} placeholder="Nome completo" />
-                  </Field>
-                  <Field label="Parentesco" name="referencia2Parentesco">
-                    <input id="referencia2Parentesco" name="referencia2Parentesco" value={form.referencia2Parentesco} onChange={updateField} placeholder="Ex.: irmã, colega" />
-                  </Field>
-                  <Field label="Telefone" name="referencia2Telefone" error={errors.referencia2Telefone}>
-                    <input id="referencia2Telefone" name="referencia2Telefone" value={form.referencia2Telefone} onChange={updateField} inputMode="tel" placeholder="(00) 00000-0000" aria-invalid={Boolean(errors.referencia2Telefone)} aria-describedby={errors.referencia2Telefone ? 'referencia2Telefone-error' : undefined} />
-                  </Field>
-                </div>
-              </div>
-            </Section>
+                  <details className="group rounded-xl border border-border px-4 py-3 text-[0.88rem]">
+                    <summary className="flex cursor-pointer list-none items-center gap-2 font-bold text-brand-strong marker:hidden">
+                      <ChevronRight className="size-4 transition-transform group-open:rotate-90" />
+                      Como tratamos seus dados
+                    </summary>
+                    <ul className="mt-3 flex flex-col gap-2 pl-6 text-muted-foreground">
+                      <li className="list-disc leading-relaxed">
+                        <strong className="text-foreground">Finalidade:</strong> análise de crédito e simulação de
+                        financiamento — nada além disso.
+                      </li>
+                      <li className="list-disc leading-relaxed">
+                        <strong className="text-foreground">Quem acessa:</strong> apenas a equipe da Lopes Multimarcas e
+                        as instituições financeiras parceiras envolvidas na sua análise.
+                      </li>
+                      <li className="list-disc leading-relaxed">
+                        <strong className="text-foreground">Armazenamento:</strong> dados guardados em ambiente seguro,
+                        com acesso restrito.
+                      </li>
+                      <li className="list-disc leading-relaxed">
+                        <strong className="text-foreground">Seus direitos:</strong> você pode solicitar a atualização ou
+                        a exclusão dos seus dados a qualquer momento pelos canais de atendimento da loja.
+                      </li>
+                    </ul>
+                  </details>
+                </CardContent>
+              </Card>
 
-            <div className={`consent-card ${errors.consentimento ? 'has-error' : ''}`}>
-              <div className="consent-heading">
-                <ShieldCheck size={18} aria-hidden="true" />
-                <strong>Privacidade e proteção de dados</strong>
-              </div>
-              <label>
-                <input type="checkbox" name="consentimento" checked={form.consentimento} onChange={updateField} aria-invalid={Boolean(errors.consentimento)} aria-describedby={errors.consentimento ? 'consentimento-error' : undefined} />
-                <span>
-                  {CONSENT_TEXT}
-                  <strong> *</strong>
-                </span>
-              </label>
-              {errors.consentimento && <span className="field-error" id="consentimento-error">{errors.consentimento}</span>}
-              <details className="consent-details">
-                <summary>Como tratamos seus dados</summary>
-                <ul>
-                  <li><strong>Finalidade:</strong> análise de crédito e simulação de financiamento — nada além disso.</li>
-                  <li><strong>Quem acessa:</strong> apenas a equipe da Lopes Multimarcas e as instituições financeiras parceiras envolvidas na sua análise.</li>
-                  <li><strong>Armazenamento:</strong> dados guardados em ambiente seguro, com acesso restrito.</li>
-                  <li><strong>Seus direitos:</strong> você pode solicitar a atualização ou a exclusão dos seus dados a qualquer momento pelos canais de atendimento da loja.</li>
-                </ul>
-              </details>
-            </div>
+              {notice && (
+                <Alert variant={status === 'error' ? 'destructive' : 'warning'}>
+                  <AlertDescription>{notice}</AlertDescription>
+                </Alert>
+              )}
 
-            {notice && (
-              <div className={`notice ${status === 'success' ? 'success' : status === 'error' ? 'error' : ''}`} role="status">
-                {notice}
+              {/* Opaco de propósito: fica sobre o conteúdo do formulário ao rolar. */}
+              <div className="sticky bottom-4 z-30 flex flex-wrap items-center justify-end gap-3 rounded-2xl border border-border bg-card p-4 shadow-lift">
+                <Button
+                  variant="ghost"
+                  type="button"
+                  onClick={resetForm}
+                  disabled={!isDirty || status === 'submitting'}
+                >
+                  <RefreshCcw /> Limpar
+                </Button>
+                <Button variant="brand" size="lg" type="submit" disabled={status === 'submitting'}>
+                  {status === 'submitting' ? <LoaderCircle className="animate-spin" /> : <Send />}
+                  {status === 'submitting' ? 'Validando...' : 'Enviar para análise'}
+                </Button>
               </div>
-            )}
-
-            <div className="form-actions">
-              <button className="button button-ghost" type="button" onClick={resetForm} disabled={!isDirty || status === 'submitting'}>
-                <RefreshCcw size={18} /> Limpar
-              </button>
-              <button className="button button-primary" type="submit" disabled={status === 'submitting'}>
-                {status === 'submitting' ? <LoaderCircle className="spin" size={19} /> : <Send size={19} />}
-                {status === 'submitting' ? 'Validando...' : 'Enviar para análise'}
-              </button>
-            </div>
-          </form>
+            </form>
           )}
         </div>
       </main>
 
-      <footer>
-        <div className="footer-brand">
-          <img className="footer-logo" src={`${import.meta.env.BASE_URL}lopes-multimarcas-logo.png`} alt="Lopes Multimarcas" />
+      <footer className="border-t border-white/10 bg-[#0b0f14]/85">
+        <div className="mx-auto flex max-w-[1320px] flex-col items-center gap-4 px-5 py-10 text-center sm:px-8">
+          <img className="h-9 w-auto opacity-90" src={`${ASSET}lopes-multimarcas-logo.png`} alt="Lopes Multimarcas" />
+          <span className="max-w-[62ch] text-[0.84rem] leading-relaxed text-white/55">
+            Ficha cadastral para simulação de financiamento. Dados tratados conforme a LGPD (Lei nº 13.709/2018).
+          </span>
         </div>
-        <span>
-          Ficha cadastral para simulação de financiamento.
-          Dados tratados conforme a LGPD (Lei nº 13.709/2018).
-        </span>
       </footer>
 
-      {reviewOpen && (
-        <div
-          className="modal-backdrop"
-          onMouseDown={(event) => {
-            if (event.target === event.currentTarget && status !== 'submitting') setReviewOpen(false);
-          }}
-        >
-          <div className="review-modal" role="dialog" aria-modal="true" aria-labelledby="review-title">
-            <div className="modal-heading">
-              <span className="modal-icon"><FileCheck2 size={25} /></span>
+      <Dialog open={reviewOpen} onOpenChange={(aberto) => status !== 'submitting' && setReviewOpen(aberto)}>
+        <DialogContent showCloseButton={status !== 'submitting'}>
+          <DialogHeader>
+            <div className="flex items-center gap-3.5">
+              <span className="grid size-12 shrink-0 place-items-center rounded-xl bg-brand/12 text-brand-strong ring-1 ring-brand/20">
+                <FileCheck2 className="size-6" />
+              </span>
               <div>
-                <span className="eyebrow dark">Conferência final</span>
-                <h2 id="review-title">Confirme os dados principais</h2>
+                <span className="text-[0.72rem] font-bold tracking-[0.16em] text-brand-strong uppercase">
+                  Conferência final
+                </span>
+                <DialogTitle className="mt-0.5">Confirme os dados principais</DialogTitle>
               </div>
-              <button
-                className="modal-close"
-                type="button"
-                onClick={() => setReviewOpen(false)}
-                disabled={status === 'submitting'}
-                aria-label="Fechar conferência"
-              >
-                <X size={20} />
-              </button>
             </div>
+            <DialogDescription className="sr-only">
+              Revise os dados principais antes de enviar a ficha para análise.
+            </DialogDescription>
+          </DialogHeader>
 
-            <dl className="review-list">
-              {reviewItems.map(([label, value]) => (
-                <div key={label}>
-                  <dt>{label}</dt>
-                  <dd>{value}</dd>
-                </div>
-              ))}
-            </dl>
+          <dl className="divide-y divide-border overflow-hidden rounded-xl border border-border">
+            {reviewItems.map(([label, value]) => (
+              <div key={label} className="flex items-center justify-between gap-4 px-4 py-3 odd:bg-secondary/40">
+                <dt className="text-[0.8rem] font-bold text-muted-foreground">{label}</dt>
+                <dd className="truncate text-right text-[0.92rem] font-semibold">{value}</dd>
+              </div>
+            ))}
+          </dl>
 
-            <div className="modal-security">
-              <ShieldCheck size={19} />
-              <span>Os dados serão enviados somente após sua confirmação.</span>
-            </div>
+          <Alert variant="info">
+            <ShieldCheck />
+            <AlertDescription>Os dados serão enviados somente após sua confirmação.</AlertDescription>
+          </Alert>
 
-            <div className="modal-actions">
-              <button
-                className="button button-secondary"
-                type="button"
-                onClick={() => setReviewOpen(false)}
-                disabled={status === 'submitting'}
-              >
-                Voltar e editar
-              </button>
-              <button
-                ref={confirmButtonRef}
-                className="button button-primary"
-                type="button"
-                onClick={performSubmit}
-                disabled={status === 'submitting'}
-              >
-                {status === 'submitting' ? <LoaderCircle className="spin" size={19} /> : <Send size={19} />}
-                {status === 'submitting' ? 'Enviando...' : 'Confirmar e enviar'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+          <DialogFooter>
+            <Button
+              variant="secondary"
+              type="button"
+              onClick={() => setReviewOpen(false)}
+              disabled={status === 'submitting'}
+            >
+              Voltar e editar
+            </Button>
+            <Button
+              ref={confirmButtonRef}
+              variant="brand"
+              type="button"
+              onClick={performSubmit}
+              disabled={status === 'submitting'}
+            >
+              {status === 'submitting' ? <LoaderCircle className="animate-spin" /> : <Send />}
+              {status === 'submitting' ? 'Enviando...' : 'Confirmar e enviar'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

@@ -1,14 +1,34 @@
 import { useMemo, useState } from 'react';
-import { Pencil, Plus, Trash2, X } from 'lucide-react';
+import { Pencil, Plus, Trash2 } from 'lucide-react';
+
+import { Alert, AlertDescription } from '@/components/ui/alert.jsx';
+import { Badge } from '@/components/ui/badge.jsx';
+import { Button } from '@/components/ui/button.jsx';
+import { Card, CardContent } from '@/components/ui/card.jsx';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog.jsx';
+import { Input } from '@/components/ui/input.jsx';
+import { Label } from '@/components/ui/label.jsx';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select.jsx';
+import { Textarea } from '@/components/ui/textarea.jsx';
 
 import { maskCurrency, onlyDigits } from '../../utils/form.js';
-import { fmtBRL, fmtKm } from '../lib/format.js';
+import { PageHeading } from '../components/Pills.jsx';
+import { CORES, fmtBRL, fmtKm } from '../lib/format.js';
 
 const STATUS_VEICULO = {
   disponivel: { label: 'Disponível', cor: 'green' },
   reservado: { label: 'Reservado', cor: 'amber' },
   vendido: { label: 'Vendido', cor: 'gray' },
 };
+
+const TODOS = '__todos__';
 
 const vazio = { nome: '', placa: '', km: '', preco: '', cor: '', ano_modelo: '', status: 'disponivel', observacoes: '' };
 
@@ -28,8 +48,13 @@ export default function Estoque({ veiculos, fichas, api, onRecarregar }) {
 
   const listados = filtroStatus ? veiculos.filter((v) => v.status === filtroStatus) : veiculos;
 
-  const abrirNovo = () => setEditando({ ...vazio });
-  const abrirEdicao = (veiculo) =>
+  const abrirNovo = () => {
+    setErro('');
+    setEditando({ ...vazio });
+  };
+
+  const abrirEdicao = (veiculo) => {
+    setErro('');
     setEditando({
       id: veiculo.id,
       nome: veiculo.nome || '',
@@ -41,6 +66,7 @@ export default function Estoque({ veiculos, fichas, api, onRecarregar }) {
       status: veiculo.status,
       observacoes: veiculo.observacoes || '',
     });
+  };
 
   const salvar = async (event) => {
     event.preventDefault();
@@ -74,121 +100,202 @@ export default function Estoque({ veiculos, fichas, api, onRecarregar }) {
     await onRecarregar();
   };
 
-  const campo = (chave) => (event) =>
+  const campo = (chave, mascara) => (event) =>
     setEditando((atual) => ({
       ...atual,
-      [chave]: chave === 'preco' ? maskCurrency(event.target.value) : event.target.value,
+      [chave]: mascara ? maskCurrency(event.target.value) : event.target.value,
     }));
 
   return (
-    <div className="page">
-      <div className="page-heading com-acao">
-        <div>
-          <h1>Estoque de carros</h1>
-          <p>{veiculos.length} veículo{veiculos.length === 1 ? '' : 's'} · importado do controle da loja</p>
-        </div>
-        <div className="heading-acoes">
-          <select value={filtroStatus} onChange={(e) => setFiltroStatus(e.target.value)} aria-label="Filtrar estoque">
-            <option value="">Todos</option>
+    <div className="flex flex-col gap-6">
+      <PageHeading
+        titulo="Estoque de carros"
+        descricao={`${veiculos.length} veículo${veiculos.length === 1 ? '' : 's'} · importado do controle da loja`}
+      >
+        <Select
+          value={filtroStatus || TODOS}
+          onValueChange={(valor) => setFiltroStatus(valor === TODOS ? '' : valor)}
+        >
+          <SelectTrigger size="sm" aria-label="Filtrar estoque" className="w-[10.5rem]">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value={TODOS}>Todos</SelectItem>
             {Object.entries(STATUS_VEICULO).map(([valor, meta]) => (
-              <option key={valor} value={valor}>{meta.label}</option>
+              <SelectItem key={valor} value={valor}>
+                {meta.label}
+              </SelectItem>
             ))}
-          </select>
-          <button type="button" className="button-primary" onClick={abrirNovo}>
-            <Plus size={17} /> Novo veículo
-          </button>
-        </div>
-      </div>
+          </SelectContent>
+        </Select>
+        <Button variant="brand" size="sm" onClick={abrirNovo}>
+          <Plus /> Novo veículo
+        </Button>
+      </PageHeading>
 
-      <div className="estoque-grid">
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
         {listados.map((veiculo) => {
           const meta = STATUS_VEICULO[veiculo.status] || STATUS_VEICULO.disponivel;
           const qtd = interessados[veiculo.id] || 0;
           return (
-            <div className="veiculo-card" key={veiculo.id}>
-              <div className="veiculo-topo">
-                <span className={`status-pill cor-${meta.cor}`}>{meta.label}</span>
-                <div className="veiculo-acoes">
-                  <button type="button" className="icon-button" onClick={() => abrirEdicao(veiculo)} aria-label={`Editar ${veiculo.nome}`}>
-                    <Pencil size={15} />
-                  </button>
-                  <button type="button" className="icon-button perigo" onClick={() => excluir(veiculo)} aria-label={`Excluir ${veiculo.nome}`}>
-                    <Trash2 size={15} />
-                  </button>
+            <Card key={veiculo.id} className="group transition-shadow hover:shadow-lift">
+              <CardContent className="flex flex-col gap-3 py-5">
+                <div className="flex items-center justify-between gap-3">
+                  <Badge variant="outline" className={CORES[meta.cor].pill}>
+                    {meta.label}
+                  </Badge>
+                  <div className="flex gap-1 opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100">
+                    <Button
+                      variant="ghost"
+                      size="icon-sm"
+                      onClick={() => abrirEdicao(veiculo)}
+                      aria-label={`Editar ${veiculo.nome}`}
+                    >
+                      <Pencil />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon-sm"
+                      onClick={() => excluir(veiculo)}
+                      aria-label={`Excluir ${veiculo.nome}`}
+                      className="text-destructive hover:bg-destructive/10"
+                    >
+                      <Trash2 />
+                    </Button>
+                  </div>
                 </div>
-              </div>
-              <strong className="veiculo-nome">{veiculo.nome}</strong>
-              <span className="veiculo-preco">{fmtBRL(veiculo.preco_centavos)}</span>
-              <div className="veiculo-detalhes">
-                <span className="mono">{veiculo.placa || 'Sem placa'}</span>
-                <span>{veiculo.ano_modelo || '—'}</span>
-                <span>{veiculo.cor || '—'}</span>
-                <span>{fmtKm(veiculo.km)}</span>
-              </div>
-              {qtd > 0 && (
-                <span className="veiculo-interesse">
-                  {qtd} ficha{qtd > 1 ? 's' : ''} vinculada{qtd > 1 ? 's' : ''}
-                </span>
-              )}
-            </div>
+
+                <div>
+                  <strong className="font-display block text-[1.02rem] leading-snug font-bold tracking-tight">
+                    {veiculo.nome}
+                  </strong>
+                  <span className="font-display mt-1 block text-xl font-extrabold text-brand-strong tabular-nums dark:text-brand">
+                    {fmtBRL(veiculo.preco_centavos)}
+                  </span>
+                </div>
+
+                <div className="flex flex-wrap gap-x-4 gap-y-1 border-t border-border pt-3 text-[0.8rem] text-muted-foreground">
+                  <span className="font-mono">{veiculo.placa || 'Sem placa'}</span>
+                  <span>{veiculo.ano_modelo || '—'}</span>
+                  <span>{veiculo.cor || '—'}</span>
+                  <span className="tabular-nums">{fmtKm(veiculo.km)}</span>
+                </div>
+
+                {qtd > 0 && (
+                  <span className="text-[0.78rem] font-semibold text-brand-strong dark:text-brand">
+                    {qtd} ficha{qtd > 1 ? 's' : ''} vinculada{qtd > 1 ? 's' : ''}
+                  </span>
+                )}
+              </CardContent>
+            </Card>
           );
         })}
-        {listados.length === 0 && <p className="panel-vazio">Nenhum veículo neste filtro.</p>}
+
+        {listados.length === 0 && (
+          <p className="col-span-full rounded-xl border border-dashed border-border py-14 text-center text-muted-foreground">
+            Nenhum veículo neste filtro.
+          </p>
+        )}
       </div>
 
-      {editando && (
-        <div className="crm-modal-backdrop" onMouseDown={(e) => e.target === e.currentTarget && setEditando(null)}>
-          <form className="crm-modal" onSubmit={salvar}>
-            <div className="modal-topo">
-              <h2>{editando.id ? 'Editar veículo' : 'Novo veículo'}</h2>
-              <button type="button" className="icon-button" onClick={() => setEditando(null)} aria-label="Fechar">
-                <X size={18} />
-              </button>
-            </div>
-            <label>Nome / modelo *</label>
-            <input value={editando.nome} onChange={campo('nome')} placeholder="MARCA / MODELO VERSÃO" required />
-            <div className="modal-grid">
-              <div>
-                <label>Placa</label>
-                <input value={editando.placa} onChange={campo('placa')} placeholder="ABC1D23" maxLength={8} />
+      <Dialog open={Boolean(editando)} onOpenChange={(aberto) => !aberto && setEditando(null)}>
+        <DialogContent className="max-w-2xl">
+          {editando && (
+            <form onSubmit={salvar} className="flex flex-col gap-5">
+              <DialogHeader>
+                <DialogTitle>{editando.id ? 'Editar veículo' : 'Novo veículo'}</DialogTitle>
+                <DialogDescription>Dados usados nas fichas e no funil de vendas.</DialogDescription>
+              </DialogHeader>
+
+              <div className="flex flex-col gap-2">
+                <Label htmlFor="veiculo-nome">
+                  Nome / modelo <span className="text-destructive">*</span>
+                </Label>
+                <Input
+                  id="veiculo-nome"
+                  value={editando.nome}
+                  onChange={campo('nome')}
+                  placeholder="MARCA / MODELO VERSÃO"
+                  required
+                />
               </div>
-              <div>
-                <label>KM</label>
-                <input value={editando.km} onChange={campo('km')} inputMode="numeric" placeholder="57.000" />
+
+              <div className="grid gap-4 sm:grid-cols-3">
+                <div className="flex flex-col gap-2">
+                  <Label htmlFor="veiculo-placa">Placa</Label>
+                  <Input id="veiculo-placa" value={editando.placa} onChange={campo('placa')} placeholder="ABC1D23" maxLength={8} />
+                </div>
+                <div className="flex flex-col gap-2">
+                  <Label htmlFor="veiculo-km">KM</Label>
+                  <Input id="veiculo-km" value={editando.km} onChange={campo('km')} inputMode="numeric" placeholder="57.000" />
+                </div>
+                <div className="flex flex-col gap-2">
+                  <Label htmlFor="veiculo-preco">Preço de venda</Label>
+                  <Input
+                    id="veiculo-preco"
+                    value={editando.preco}
+                    onChange={campo('preco', true)}
+                    inputMode="numeric"
+                    placeholder="R$ 0,00"
+                  />
+                </div>
+                <div className="flex flex-col gap-2">
+                  <Label htmlFor="veiculo-cor">Cor</Label>
+                  <Input id="veiculo-cor" value={editando.cor} onChange={campo('cor')} placeholder="Branco" />
+                </div>
+                <div className="flex flex-col gap-2">
+                  <Label htmlFor="veiculo-ano">Ano do modelo</Label>
+                  <Input id="veiculo-ano" value={editando.ano_modelo} onChange={campo('ano_modelo')} placeholder="2024/2025" />
+                </div>
+                <div className="flex flex-col gap-2">
+                  <Label htmlFor="veiculo-status">Situação</Label>
+                  <Select
+                    value={editando.status}
+                    onValueChange={(valor) => setEditando((atual) => ({ ...atual, status: valor }))}
+                  >
+                    <SelectTrigger id="veiculo-status">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {Object.entries(STATUS_VEICULO).map(([valor, meta]) => (
+                        <SelectItem key={valor} value={valor}>
+                          {meta.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
               </div>
-              <div>
-                <label>Preço de venda</label>
-                <input value={editando.preco} onChange={campo('preco')} inputMode="numeric" placeholder="R$ 0,00" />
+
+              <div className="flex flex-col gap-2">
+                <Label htmlFor="veiculo-obs">Observações</Label>
+                <Textarea
+                  id="veiculo-obs"
+                  value={editando.observacoes}
+                  onChange={campo('observacoes')}
+                  rows={2}
+                  placeholder="Detalhes internos do veículo"
+                />
               </div>
-              <div>
-                <label>Cor</label>
-                <input value={editando.cor} onChange={campo('cor')} placeholder="Branco" />
-              </div>
-              <div>
-                <label>Ano do modelo</label>
-                <input value={editando.ano_modelo} onChange={campo('ano_modelo')} placeholder="2024/2025" />
-              </div>
-              <div>
-                <label>Situação</label>
-                <select value={editando.status} onChange={campo('status')}>
-                  {Object.entries(STATUS_VEICULO).map(([valor, meta]) => (
-                    <option key={valor} value={valor}>{meta.label}</option>
-                  ))}
-                </select>
-              </div>
-            </div>
-            <label>Observações</label>
-            <textarea value={editando.observacoes} onChange={campo('observacoes')} rows={2} placeholder="Detalhes internos do veículo" />
-            {erro && <div className="crm-error">{erro}</div>}
-            <div className="modal-acoes">
-              <button type="button" className="button-secondary" onClick={() => setEditando(null)}>Cancelar</button>
-              <button type="submit" className="button-primary" disabled={salvando}>
-                {salvando ? 'Salvando...' : 'Salvar veículo'}
-              </button>
-            </div>
-          </form>
-        </div>
-      )}
+
+              {erro && (
+                <Alert variant="destructive">
+                  <AlertDescription>{erro}</AlertDescription>
+                </Alert>
+              )}
+
+              <DialogFooter>
+                <Button variant="secondary" type="button" onClick={() => setEditando(null)}>
+                  Cancelar
+                </Button>
+                <Button variant="brand" type="submit" disabled={salvando}>
+                  {salvando ? 'Salvando...' : 'Salvar veículo'}
+                </Button>
+              </DialogFooter>
+            </form>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

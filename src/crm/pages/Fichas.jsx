@@ -1,11 +1,16 @@
 import { useMemo, useState } from 'react';
 import { FilterX } from 'lucide-react';
 
+import { Button } from '@/components/ui/button.jsx';
+import { Card } from '@/components/ui/card.jsx';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select.jsx';
+import { Skeleton } from '@/components/ui/skeleton.jsx';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table.jsx';
+
+import { EsperaPill, PageHeading, StatusPill } from '../components/Pills.jsx';
 import {
-  STATUS_META,
   STATUS_OPTIONS,
   buscaEm,
-  esperaInfo,
   fmtBRL,
   fmtCPF,
   fmtDate,
@@ -30,6 +35,27 @@ const FAIXAS_ENTRADA = [
 ];
 
 const filtroInicial = { status: '', regiao: '', idade: '', veiculo: '', entrada: '', instituicao: '', indicacao: '' };
+
+// O Radix Select reserva a string vazia, então "todos" representa o filtro desligado.
+const TODOS = '__todos__';
+
+function Filtro({ label, valor, onChange, opcoes, className }) {
+  return (
+    <Select value={valor || TODOS} onValueChange={(novo) => onChange(novo === TODOS ? '' : novo)}>
+      <SelectTrigger size="sm" aria-label={label} className={className}>
+        <SelectValue />
+      </SelectTrigger>
+      <SelectContent>
+        <SelectItem value={TODOS}>{label}: todas</SelectItem>
+        {opcoes.map(({ value, label: rotulo }) => (
+          <SelectItem key={value} value={value}>
+            {rotulo}
+          </SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
+  );
+}
 
 export default function Fichas({ fichas, veiculos, busca, carregando, onAbrirFicha }) {
   const [filtros, setFiltros] = useState(filtroInicial);
@@ -63,128 +89,131 @@ export default function Fichas({ fichas, veiculos, busca, carregando, onAbrirFic
     });
   }, [fichas, busca, filtros]);
 
-  const set = (campo) => (event) => setFiltros((atual) => ({ ...atual, [campo]: event.target.value }));
+  const set = (campo) => (valor) => setFiltros((atual) => ({ ...atual, [campo]: valor }));
   const temFiltro = busca || Object.values(filtros).some(Boolean);
+  const paraOpcoes = (lista) => lista.map((item) => ({ value: item, label: item }));
 
   return (
-    <div className="page">
-      <div className="page-heading">
-        <h1>Fichas cadastrais</h1>
-        <p>
-          {carregando
+    <div className="flex flex-col gap-6">
+      <PageHeading
+        titulo="Fichas cadastrais"
+        descricao={
+          carregando
             ? 'Carregando...'
-            : `${filtradas.length} de ${fichas.length} ficha${fichas.length === 1 ? '' : 's'}${busca ? ` para "${busca}"` : ''}`}
-        </p>
-      </div>
+            : `${filtradas.length} de ${fichas.length} ficha${fichas.length === 1 ? '' : 's'}${busca ? ` para "${busca}"` : ''}`
+        }
+      />
 
-      <div className="filtros-bar">
-        <select value={filtros.status} onChange={set('status')} aria-label="Filtrar por situação">
-          <option value="">Situação: todas</option>
-          {STATUS_OPTIONS.map((s) => (
-            <option key={s.value} value={s.value}>{s.label}</option>
-          ))}
-        </select>
-        <select value={filtros.regiao} onChange={set('regiao')} aria-label="Filtrar por região">
-          <option value="">Região: todas</option>
-          {opcoes.regioes.map((r) => (
-            <option key={r} value={r}>{r}</option>
-          ))}
-        </select>
-        <select value={filtros.idade} onChange={set('idade')} aria-label="Filtrar por idade">
-          <option value="">Idade: todas</option>
-          {FAIXAS_IDADE.map((f) => (
-            <option key={f.id} value={f.id}>{f.label}</option>
-          ))}
-        </select>
-        <select value={filtros.veiculo} onChange={set('veiculo')} aria-label="Filtrar por carro">
-          <option value="">Carro: todos</option>
-          {veiculos.map((v) => (
-            <option key={v.id} value={v.id}>{v.nome} ({v.placa})</option>
-          ))}
-        </select>
-        <select value={filtros.entrada} onChange={set('entrada')} aria-label="Filtrar por valor de entrada">
-          <option value="">Entrada: todas</option>
-          {FAIXAS_ENTRADA.map((f) => (
-            <option key={f.id} value={f.id}>{f.label}</option>
-          ))}
-        </select>
-        <select value={filtros.instituicao} onChange={set('instituicao')} aria-label="Filtrar por instituição financeira">
-          <option value="">Instituição: todas</option>
-          {opcoes.instituicoes.map((i) => (
-            <option key={i} value={i}>{i}</option>
-          ))}
-        </select>
-        <select value={filtros.indicacao} onChange={set('indicacao')} aria-label="Filtrar por indicação">
-          <option value="">Indicação: todas</option>
-          {opcoes.indicacoes.map((i) => (
-            <option key={i} value={i}>{i}</option>
-          ))}
-        </select>
+      <Card className="flex flex-row flex-wrap items-center gap-2.5 p-3">
+        <Filtro label="Situação" valor={filtros.status} onChange={set('status')} opcoes={STATUS_OPTIONS} className="w-[10.5rem]" />
+        <Filtro label="Região" valor={filtros.regiao} onChange={set('regiao')} opcoes={paraOpcoes(opcoes.regioes)} className="w-[10.5rem]" />
+        <Filtro
+          label="Idade"
+          valor={filtros.idade}
+          onChange={set('idade')}
+          opcoes={FAIXAS_IDADE.map((f) => ({ value: f.id, label: f.label }))}
+          className="w-[10rem]"
+        />
+        <Filtro
+          label="Carro"
+          valor={filtros.veiculo}
+          onChange={set('veiculo')}
+          opcoes={veiculos.map((v) => ({ value: v.id, label: `${v.nome} (${v.placa})` }))}
+          className="w-[13rem]"
+        />
+        <Filtro
+          label="Entrada"
+          valor={filtros.entrada}
+          onChange={set('entrada')}
+          opcoes={FAIXAS_ENTRADA.map((f) => ({ value: f.id, label: f.label }))}
+          className="w-[11rem]"
+        />
+        <Filtro
+          label="Instituição"
+          valor={filtros.instituicao}
+          onChange={set('instituicao')}
+          opcoes={paraOpcoes(opcoes.instituicoes)}
+          className="w-[11.5rem]"
+        />
+        <Filtro label="Indicação" valor={filtros.indicacao} onChange={set('indicacao')} opcoes={paraOpcoes(opcoes.indicacoes)} className="w-[11rem]" />
         {temFiltro && (
-          <button type="button" className="link-button" onClick={() => setFiltros(filtroInicial)}>
-            <FilterX size={15} /> Limpar filtros
-          </button>
+          <Button variant="link" size="sm" onClick={() => setFiltros(filtroInicial)}>
+            <FilterX /> Limpar filtros
+          </Button>
         )}
-      </div>
+      </Card>
 
-      <div className="tabela-wrap">
-        <table className="tabela-fichas">
-          <thead>
-            <tr>
-              <th>Cliente</th>
-              <th>Protocolo</th>
-              <th>Contato</th>
-              <th>Carro</th>
-              <th>Entrada</th>
-              <th>Situação</th>
-              <th>Espera</th>
-              <th>Recebida</th>
-            </tr>
-          </thead>
-          <tbody>
-            {filtradas.map((ficha) => {
-              const espera = esperaInfo(ficha);
-              const idade = idadeDe(ficha.dados?.cliente?.dataNascimento);
-              return (
-                <tr key={ficha.id} onClick={() => onAbrirFicha(ficha.id)}>
-                  <td>
-                    <strong>{nomeDa(ficha)}</strong>
-                    <small>{[idade && `${idade} anos`, regiaoDa(ficha)].filter(Boolean).join(' · ') || '—'}</small>
-                  </td>
-                  <td className="mono">{ficha.protocolo}</td>
-                  <td>
-                    <span>{fmtPhone(ficha.celular)}</span>
-                    <small className="mono">{fmtCPF(ficha.cpf)}</small>
-                  </td>
-                  <td>
-                    {ficha.veiculo ? (
-                      <>
-                        <span>{ficha.veiculo.nome}</span>
-                        <small>{ficha.veiculo.placa} · {fmtBRL(ficha.veiculo.preco_centavos)}</small>
-                      </>
-                    ) : (
-                      <span className="sem-dado">Sem carro</span>
-                    )}
-                  </td>
-                  <td>{fmtBRL(ficha.valor_entrada_centavos)}</td>
-                  <td>
-                    <span className={`status-pill cor-${STATUS_META[ficha.status]?.cor || 'gray'}`}>
-                      {STATUS_META[ficha.status]?.label || ficha.status}
-                    </span>
-                  </td>
-                  <td><span className={`espera ${espera.nivel}`}>{espera.label}</span></td>
-                  <td>{fmtDate(ficha.criado_em)}</td>
-                </tr>
-              );
-            })}
-            {!carregando && filtradas.length === 0 && (
-              <tr>
-                <td colSpan={8} className="tabela-vazia">Nenhuma ficha encontrada com esses critérios.</td>
-              </tr>
-            )}
-          </tbody>
-        </table>
-      </div>
+      <Card className="overflow-hidden">
+        {carregando ? (
+          <div className="flex flex-col gap-3 p-5">
+            {Array.from({ length: 6 }).map((_, indice) => (
+              <Skeleton key={indice} className="h-12" />
+            ))}
+          </div>
+        ) : (
+          <Table className="min-w-[62rem]">
+            <TableHeader>
+              <TableRow className="hover:bg-transparent">
+                <TableHead>Cliente</TableHead>
+                <TableHead>Protocolo</TableHead>
+                <TableHead>Contato</TableHead>
+                <TableHead>Carro</TableHead>
+                <TableHead>Entrada</TableHead>
+                <TableHead>Situação</TableHead>
+                <TableHead>Espera</TableHead>
+                <TableHead>Recebida</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {filtradas.map((ficha) => {
+                const idade = idadeDe(ficha.dados?.cliente?.dataNascimento);
+                return (
+                  <TableRow key={ficha.id} onClick={() => onAbrirFicha(ficha.id)} className="cursor-pointer">
+                    <TableCell>
+                      <strong className="block font-semibold">{nomeDa(ficha)}</strong>
+                      <small className="text-muted-foreground">
+                        {[idade && `${idade} anos`, regiaoDa(ficha)].filter(Boolean).join(' · ') || '—'}
+                      </small>
+                    </TableCell>
+                    <TableCell className="font-mono text-[0.82rem] tracking-wide">{ficha.protocolo}</TableCell>
+                    <TableCell>
+                      <span className="block whitespace-nowrap">{fmtPhone(ficha.celular)}</span>
+                      <small className="font-mono text-[0.78rem] text-muted-foreground">{fmtCPF(ficha.cpf)}</small>
+                    </TableCell>
+                    <TableCell>
+                      {ficha.veiculo ? (
+                        <>
+                          <span className="block">{ficha.veiculo.nome}</span>
+                          <small className="text-muted-foreground">
+                            {ficha.veiculo.placa} · {fmtBRL(ficha.veiculo.preco_centavos)}
+                          </small>
+                        </>
+                      ) : (
+                        <span className="text-muted-foreground/70">Sem carro</span>
+                      )}
+                    </TableCell>
+                    <TableCell className="tabular-nums">{fmtBRL(ficha.valor_entrada_centavos)}</TableCell>
+                    <TableCell>
+                      <StatusPill status={ficha.status} />
+                    </TableCell>
+                    <TableCell>
+                      <EsperaPill ficha={ficha} />
+                    </TableCell>
+                    <TableCell className="whitespace-nowrap text-muted-foreground">{fmtDate(ficha.criado_em)}</TableCell>
+                  </TableRow>
+                );
+              })}
+              {filtradas.length === 0 && (
+                <TableRow className="hover:bg-transparent">
+                  <TableCell colSpan={8} className="py-12 text-center text-muted-foreground">
+                    Nenhuma ficha encontrada com esses critérios.
+                  </TableCell>
+                </TableRow>
+              )}
+            </TableBody>
+          </Table>
+        )}
+      </Card>
     </div>
   );
 }

@@ -59,6 +59,54 @@ export const STATUS_OPTIONS = Object.entries(STATUS_META).map(([value, meta]) =>
   label: meta.label,
 }));
 
+// Classes Tailwind por cor de situação — literais para o scanner do Tailwind enxergar.
+export const CORES = {
+  blue: {
+    pill: 'border-sky-500/25 bg-sky-500/12 text-sky-700 dark:text-sky-300',
+    solid: 'bg-sky-500',
+    dot: 'bg-sky-500',
+  },
+  amber: {
+    pill: 'border-amber-500/25 bg-amber-500/12 text-amber-700 dark:text-amber-300',
+    solid: 'bg-amber-500',
+    dot: 'bg-amber-500',
+  },
+  purple: {
+    pill: 'border-violet-500/25 bg-violet-500/12 text-violet-700 dark:text-violet-300',
+    solid: 'bg-violet-500',
+    dot: 'bg-violet-500',
+  },
+  teal: {
+    pill: 'border-teal-500/25 bg-teal-500/12 text-teal-700 dark:text-teal-300',
+    solid: 'bg-teal-500',
+    dot: 'bg-teal-500',
+  },
+  green: {
+    pill: 'border-emerald-500/25 bg-emerald-500/12 text-emerald-700 dark:text-emerald-300',
+    solid: 'bg-emerald-500',
+    dot: 'bg-emerald-500',
+  },
+  red: {
+    pill: 'border-red-500/25 bg-red-500/12 text-red-700 dark:text-red-300',
+    solid: 'bg-red-500',
+    dot: 'bg-red-500',
+  },
+  gray: {
+    pill: 'border-slate-400/25 bg-slate-400/12 text-slate-600 dark:text-slate-300',
+    solid: 'bg-slate-400',
+    dot: 'bg-slate-400',
+  },
+};
+
+export const corDoStatus = (status) => CORES[STATUS_META[status]?.cor] || CORES.gray;
+
+// Classes do indicador de espera.
+export const ESPERA_CLASSES = {
+  ok: 'border-emerald-500/25 bg-emerald-500/12 text-emerald-700 dark:text-emerald-300',
+  atencao: 'border-amber-500/25 bg-amber-500/12 text-amber-700 dark:text-amber-300',
+  atrasado: 'border-red-500/25 bg-red-500/12 text-red-700 dark:text-red-300',
+};
+
 // Indicador de tempo de espera desde a última movimentação.
 export const esperaInfo = (ficha) => {
   const referencia = ficha.atualizado_em || ficha.criado_em;

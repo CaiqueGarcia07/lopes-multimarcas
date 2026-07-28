@@ -1,17 +1,33 @@
 import { AlertTriangle, ArrowRight, BadgeCheck, CircleDollarSign, FileText, Handshake, TrendingUp, Wallet } from 'lucide-react';
 
-import { STATUS_META, esperaInfo, fmtBRL, fmtDate, nomeDa } from '../lib/format.js';
+import { Button } from '@/components/ui/button.jsx';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card.jsx';
+import { Skeleton } from '@/components/ui/skeleton.jsx';
+import { cn } from '@/lib/utils.js';
 
-function Kpi({ icon: Icon, label, valor, detalhe, tom }) {
+import { EsperaPill, PageHeading, StatusPill } from '../components/Pills.jsx';
+import { STATUS_META, corDoStatus, esperaInfo, fmtBRL, fmtDate, nomeDa } from '../lib/format.js';
+
+const TONS = {
+  brand: 'from-brand/18 to-brand/5 text-brand-strong dark:text-brand ring-brand/20',
+  teal: 'from-teal-500/18 to-teal-500/5 text-teal-600 dark:text-teal-300 ring-teal-500/20',
+  green: 'from-emerald-500/18 to-emerald-500/5 text-emerald-600 dark:text-emerald-300 ring-emerald-500/20',
+};
+
+function Kpi({ icon: Icon, label, valor, detalhe, tom = 'brand' }) {
   return (
-    <div className={`kpi-card ${tom || ''}`}>
-      <span className="kpi-icon"><Icon size={20} /></span>
-      <div>
-        <span className="kpi-label">{label}</span>
-        <strong className="kpi-valor">{valor}</strong>
-        {detalhe && <span className="kpi-detalhe">{detalhe}</span>}
-      </div>
-    </div>
+    <Card className="transition-shadow hover:shadow-lift">
+      <CardContent className="flex items-start gap-4 py-5">
+        <span className={cn('grid size-11 shrink-0 place-items-center rounded-xl bg-gradient-to-br ring-1', TONS[tom])}>
+          <Icon className="size-5" />
+        </span>
+        <div className="flex min-w-0 flex-col gap-0.5">
+          <span className="text-[0.76rem] font-bold tracking-wide text-muted-foreground">{label}</span>
+          <strong className="font-display text-2xl leading-none tracking-tight">{valor}</strong>
+          {detalhe && <span className="mt-1 text-[0.78rem] text-muted-foreground">{detalhe}</span>}
+        </div>
+      </CardContent>
+    </Card>
   );
 }
 
@@ -39,69 +55,98 @@ export default function Dashboard({ fichas, carregando, onAbrirFicha, onIrPara }
   const maxQtd = Math.max(1, ...porStatus.map((s) => s.qtd));
 
   return (
-    <div className="page">
-      <div className="page-heading">
-        <h1>Visão geral</h1>
-        <p>{carregando ? 'Carregando dados...' : 'Resumo das fichas e vendas da loja.'}</p>
-      </div>
+    <div className="flex flex-col gap-6">
+      <PageHeading
+        titulo="Visão geral"
+        descricao={carregando ? 'Carregando dados...' : 'Resumo das fichas e vendas da loja.'}
+      />
 
-      <div className="kpi-grid">
-        <Kpi icon={FileText} label="Fichas recebidas" valor={total} detalhe={`${novas} nova${novas === 1 ? '' : 's'} aguardando`} />
-        <Kpi icon={BadgeCheck} label="Fichas aprovadas" valor={aprovadas.length} detalhe={valorAprovado ? `${fmtBRL(valorAprovado)} em negociação` : 'Sem valores lançados'} tom="teal" />
-        <Kpi icon={Handshake} label="Vendas concluídas" valor={vendas.length} detalhe={`Conversão de ${conversao}%`} tom="green" />
-        <Kpi icon={CircleDollarSign} label="Total vendido" valor={fmtBRL(valorVendido)} detalhe="Somatório das fichas concluídas" tom="green" />
-        <Kpi icon={Wallet} label="Ticket médio" valor={fmtBRL(ticketMedio)} detalhe="Por venda concluída" />
-        <Kpi icon={TrendingUp} label="Em andamento" valor={total - vendas.length - fichas.filter((f) => ['reprovado', 'arquivado'].includes(f.status)).length} detalhe="Fichas ativas no funil" />
-      </div>
+      {carregando ? (
+        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+          {Array.from({ length: 6 }).map((_, indice) => (
+            <Skeleton key={indice} className="h-24" />
+          ))}
+        </div>
+      ) : (
+        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+          <Kpi icon={FileText} label="Fichas recebidas" valor={total} detalhe={`${novas} nova${novas === 1 ? '' : 's'} aguardando`} />
+          <Kpi
+            icon={BadgeCheck}
+            label="Fichas aprovadas"
+            valor={aprovadas.length}
+            detalhe={valorAprovado ? `${fmtBRL(valorAprovado)} em negociação` : 'Sem valores lançados'}
+            tom="teal"
+          />
+          <Kpi icon={Handshake} label="Vendas concluídas" valor={vendas.length} detalhe={`Conversão de ${conversao}%`} tom="green" />
+          <Kpi icon={CircleDollarSign} label="Total vendido" valor={fmtBRL(valorVendido)} detalhe="Somatório das fichas concluídas" tom="green" />
+          <Kpi icon={Wallet} label="Ticket médio" valor={fmtBRL(ticketMedio)} detalhe="Por venda concluída" />
+          <Kpi
+            icon={TrendingUp}
+            label="Em andamento"
+            valor={total - vendas.length - fichas.filter((f) => ['reprovado', 'arquivado'].includes(f.status)).length}
+            detalhe="Fichas ativas no funil"
+          />
+        </div>
+      )}
 
-      <div className="dash-grid">
-        <section className="panel">
-          <div className="panel-heading">
-            <h2>Funil por situação</h2>
-            <button type="button" className="link-button" onClick={() => onIrPara('esteira')}>
-              Abrir esteira <ArrowRight size={14} />
-            </button>
-          </div>
-          <div className="funil">
+      <div className="grid gap-4 xl:grid-cols-[minmax(0,1.15fr)_minmax(0,1fr)]">
+        <Card>
+          <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-3">
+            <CardTitle>Funil por situação</CardTitle>
+            <Button variant="link" size="sm" className="h-auto p-0" onClick={() => onIrPara('esteira')}>
+              Abrir esteira <ArrowRight className="size-3.5" />
+            </Button>
+          </CardHeader>
+          <CardContent className="flex flex-col gap-3.5">
             {porStatus.map(({ status, meta, qtd }) => (
-              <div className="funil-linha" key={status}>
-                <span className="funil-label">{meta.label}</span>
-                <div className="funil-barra">
-                  <span className={`cor-${meta.cor}`} style={{ width: `${(qtd / maxQtd) * 100}%` }} />
+              <div key={status} className="grid grid-cols-[9.5rem_1fr_2.5rem] items-center gap-3">
+                <span className="truncate text-[0.84rem] font-semibold text-muted-foreground">{meta.label}</span>
+                <div className="h-2.5 overflow-hidden rounded-full bg-secondary">
+                  <span
+                    className={cn('block h-full rounded-full transition-[width] duration-500', corDoStatus(status).solid)}
+                    style={{ width: `${(qtd / maxQtd) * 100}%` }}
+                  />
                 </div>
-                <span className="funil-qtd">{qtd}</span>
+                <span className="text-right font-display text-[0.95rem] font-bold tabular-nums">{qtd}</span>
               </div>
             ))}
-          </div>
-        </section>
+          </CardContent>
+        </Card>
 
-        <section className="panel">
-          <div className="panel-heading">
-            <h2><AlertTriangle size={17} /> Aguardando ação</h2>
-            <span className="panel-sub">Paradas há 5 dias ou mais</span>
-          </div>
-          {atrasadas.length === 0 ? (
-            <p className="panel-vazio">Nenhuma ficha atrasada. Bom trabalho!</p>
-          ) : (
-            <ul className="lista-alertas">
-              {atrasadas.map((ficha) => {
-                const espera = esperaInfo(ficha);
-                return (
+        <Card>
+          <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-3">
+            <CardTitle className="flex items-center gap-2">
+              <AlertTriangle className="size-4 text-amber-500" /> Aguardando ação
+            </CardTitle>
+            <span className="text-[0.78rem] text-muted-foreground">Paradas há 5 dias ou mais</span>
+          </CardHeader>
+          <CardContent>
+            {atrasadas.length === 0 ? (
+              <p className="rounded-xl border border-dashed border-border py-8 text-center text-sm text-muted-foreground">
+                Nenhuma ficha atrasada. Bom trabalho!
+              </p>
+            ) : (
+              <ul className="flex flex-col gap-2">
+                {atrasadas.map((ficha) => (
                   <li key={ficha.id}>
-                    <button type="button" onClick={() => onAbrirFicha(ficha.id)}>
-                      <span className="alerta-nome">{nomeDa(ficha)}</span>
-                      <span className={`status-pill cor-${STATUS_META[ficha.status].cor}`}>
-                        {STATUS_META[ficha.status].label}
+                    <button
+                      type="button"
+                      onClick={() => onAbrirFicha(ficha.id)}
+                      className="flex w-full flex-wrap items-center gap-2.5 rounded-xl border border-border px-3.5 py-3 text-left transition-colors hover:border-brand/40 hover:bg-secondary/60"
+                    >
+                      <span className="min-w-0 flex-1 truncate text-[0.9rem] font-semibold">{nomeDa(ficha)}</span>
+                      <StatusPill status={ficha.status} />
+                      <EsperaPill ficha={ficha} sufixo="parada" />
+                      <span className="w-full text-[0.75rem] text-muted-foreground">
+                        desde {fmtDate(ficha.atualizado_em)}
                       </span>
-                      <span className="espera atrasado">{espera.label} parada</span>
-                      <span className="alerta-data">desde {fmtDate(ficha.atualizado_em)}</span>
                     </button>
                   </li>
-                );
-              })}
-            </ul>
-          )}
-        </section>
+                ))}
+              </ul>
+            )}
+          </CardContent>
+        </Card>
       </div>
     </div>
   );

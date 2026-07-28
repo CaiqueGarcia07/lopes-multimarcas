@@ -7,9 +7,18 @@ Web-app React responsivo para captura de fichas de financiamento e CRM interno d
 - Formulário público: <https://caiquegarcia07.github.io/lopes-multimarcas/>
 - CRM da equipe: <https://caiquegarcia07.github.io/lopes-multimarcas/crm/>
 
+## Design system
+
+Formulário e CRM compartilham a mesma base visual: **Tailwind CSS v4** + componentes no padrão **shadcn/ui** (Radix UI + CVA), copiados para `src/components/ui/` — o código dos componentes é do projeto, sem dependência de tema externo.
+
+- Tokens de cor, raio, sombra e tipografia ficam em [`src/index.css`](src/index.css); trocar a marca ali reflete nas duas telas.
+- Tema escuro do CRM usa o atributo `data-theme="dark"` no `<html>` (variante `dark:` do Tailwind mapeada para ele).
+- Fundo fotográfico do formulário e do login: `public/hero-showroom.jpg` — foto de showroom do [Unsplash](https://unsplash.com/) (licença livre, uso comercial permitido). Para usar uma foto da própria loja, basta substituir o arquivo mantendo o nome.
+
 ## Recursos incluídos
 
 - Layout responsivo para desktop, tablet e celular
+- Fundo fotográfico com sobreposição escura e cartões em vidro fosco
 - Seções recolhíveis e indicador de progresso
 - Máscaras de CPF, CNPJ, CEP, telefone e valores em reais
 - Validação matemática de CPF e CNPJ
@@ -29,7 +38,10 @@ Web-app React responsivo para captura de fichas de financiamento e CRM interno d
 src/
 ├── App.jsx                    # Interface e fluxo do formulário
 ├── main.jsx                   # Inicialização do React
-├── styles.css                 # Identidade visual e responsividade
+├── index.css                  # Tokens do design system (Tailwind v4 + shadcn/ui)
+├── components/ui/             # Componentes shadcn/ui usados nas duas telas
+├── lib/utils.js               # cn() — junção de classes do Tailwind
+├── crm/                       # CRM interno (shell, páginas e helpers)
 ├── services/
 │   └── proposalApi.js         # Comunicação com API/webhook
 └── utils/
