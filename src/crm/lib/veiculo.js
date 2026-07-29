@@ -68,6 +68,28 @@ export const fichaTecnica = (veiculo) =>
     .filter(Boolean)
     .join(' · ');
 
+/** Fotos do veículo; a primeira da lista é a capa. */
+export const fotosDe = (veiculo) => (Array.isArray(veiculo?.fotos) ? veiculo.fotos : []);
+
+export const capaDe = (veiculo) => fotosDe(veiculo)[0]?.path || null;
+
+/** Texto usado pela busca do estoque. */
+export const textoBusca = (veiculo) =>
+  [
+    veiculo.nome,
+    veiculo.placa,
+    veiculo.cor,
+    veiculo.carroceria,
+    veiculo.combustivel,
+    veiculo.cambio,
+    veiculo.ano_modelo,
+    veiculo.ano_fabricacao,
+    veiculo.observacoes,
+  ]
+    .filter(Boolean)
+    .join(' ')
+    .toLowerCase();
+
 export const novoGasto = () => ({
   id: `g-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
   tipo: TIPOS_GASTO[0],

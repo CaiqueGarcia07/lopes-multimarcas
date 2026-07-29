@@ -56,6 +56,25 @@ export function createSupabaseApi(client, userEmail) {
       unwrap(await client.from('veiculos').delete().eq('id', id).select('id'));
     },
 
+    // Fotos ficam no bucket público "veiculos", um diretório por carro.
+    async uploadFotoVeiculo(veiculoId, arquivo) {
+      const nomeSeguro = arquivo.name
+        .normalize('NFD')
+        .replace(/[̀-ͯ]/g, '')
+        .replace(/[^\w.-]+/g, '_');
+      const path = `${veiculoId || 'novo'}/${Date.now()}-${nomeSeguro}`;
+      unwrap(await client.storage.from('veiculos').upload(path, arquivo, { contentType: arquivo.type }));
+      return { path };
+    },
+
+    async deleteFotoVeiculo(path) {
+      unwrap(await client.storage.from('veiculos').remove([path]));
+    },
+
+    fotoUrl(path) {
+      return client.storage.from('veiculos').getPublicUrl(path).data.publicUrl;
+    },
+
     async listFollowups(propostaId) {
       return unwrap(
         await client
@@ -120,6 +139,7 @@ export function createDemoApi() {
   let veiculos = demoVeiculos.map((v) => ({ ...v }));
   let followups = demoFollowups.map((f) => ({ ...f }));
   let anexosDemo = [];
+  const fotosDemo = new Map();
   let seq = 100;
 
   const comVeiculo = (ficha) => ({
@@ -183,6 +203,23 @@ export function createDemoApi() {
       await latency();
       veiculos = veiculos.filter((v) => v.id !== id);
       fichas = fichas.map((f) => (f.veiculo_id === id ? { ...f, veiculo_id: null } : f));
+    },
+
+    // No modo demonstração a foto vive só na memória do navegador.
+    async uploadFotoVeiculo(veiculoId, arquivo) {
+      await latency();
+      const path = `demo/${Date.now()}-${arquivo.name}`;
+      fotosDemo.set(path, URL.createObjectURL(arquivo));
+      return { path };
+    },
+
+    async deleteFotoVeiculo(path) {
+      await latency();
+      fotosDemo.delete(path);
+    },
+
+    fotoUrl(path) {
+      return fotosDemo.get(path) || '';
     },
 
     async listFollowups(propostaId) {

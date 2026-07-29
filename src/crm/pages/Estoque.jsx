@@ -1,10 +1,21 @@
-import { useMemo, useState } from 'react';
-import { Pencil, Plus, Trash2, Wrench } from 'lucide-react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import {
+  FilterX,
+  Images,
+  LayoutGrid,
+  LoaderCircle,
+  Plus,
+  Rows3,
+  Search,
+  Star,
+  Trash2,
+  Wrench,
+  X,
+} from 'lucide-react';
 
 import { Alert, AlertDescription } from '@/components/ui/alert.jsx';
-import { Badge } from '@/components/ui/badge.jsx';
 import { Button } from '@/components/ui/button.jsx';
-import { Card, CardContent } from '@/components/ui/card.jsx';
+import { Card } from '@/components/ui/card.jsx';
 import {
   Dialog,
   DialogContent,
@@ -18,32 +29,45 @@ import { Label } from '@/components/ui/label.jsx';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select.jsx';
 import { Separator } from '@/components/ui/separator.jsx';
 import { Textarea } from '@/components/ui/textarea.jsx';
+import { cn } from '@/lib/utils.js';
 
 import { maskCurrency, onlyDigits } from '../../utils/form.js';
+import { STATUS_VEICULO, VisaoGaleria, VisaoGrade, VisaoLista } from '../components/EstoqueViews.jsx';
 import { PageHeading } from '../components/Pills.jsx';
-import { CORES, fmtBRL, fmtKm } from '../lib/format.js';
+import { fmtBRL } from '../lib/format.js';
 import {
   CAMBIOS,
   CARROCERIAS,
   COMBUSTIVEIS,
   TIPOS_GASTO,
-  anoCompleto,
-  fichaTecnica,
+  fotosDe,
   gastosDe,
   novoGasto,
-  percentualGastos,
+  textoBusca,
   totalGastos,
   valorLiquido,
 } from '../lib/veiculo.js';
 
-const STATUS_VEICULO = {
-  disponivel: { label: 'Disponível', cor: 'green' },
-  reservado: { label: 'Reservado', cor: 'amber' },
-  vendido: { label: 'Vendido', cor: 'gray' },
-};
-
 const TODOS = '__todos__';
 const NENHUM = '__nenhum__';
+
+const VISOES = [
+  { id: 'galeria', label: 'Galeria com foto', icone: Images },
+  { id: 'grade', label: 'Quadro', icone: LayoutGrid },
+  { id: 'lista', label: 'Lista', icone: Rows3 },
+];
+
+const ORDENACOES = {
+  nome: { label: 'Nome (A–Z)', comparar: (a, b) => a.nome.localeCompare(b.nome) },
+  preco_desc: { label: 'Maior preço', comparar: (a, b) => (b.preco_centavos || 0) - (a.preco_centavos || 0) },
+  preco_asc: { label: 'Menor preço', comparar: (a, b) => (a.preco_centavos || 0) - (b.preco_centavos || 0) },
+  km_asc: { label: 'Menor km', comparar: (a, b) => (a.km ?? Infinity) - (b.km ?? Infinity) },
+  recentes: { label: 'Adicionados por último', comparar: (a, b) => (a.criado_em < b.criado_em ? 1 : -1) },
+  gastos_desc: { label: 'Maior gasto', comparar: (a, b) => totalGastos(b) - totalGastos(a) },
+  liquido_desc: { label: 'Maior valor líquido', comparar: (a, b) => (valorLiquido(b) || 0) - (valorLiquido(a) || 0) },
+};
+
+const filtroInicial = { status: '', carroceria: '', combustivel: '', cambio: '' };
 
 const vazio = {
   nome: '',
@@ -59,9 +83,9 @@ const vazio = {
   status: 'disponivel',
   observacoes: '',
   gastos: [],
+  fotos: [],
 };
 
-/** Select simples com uma opção "não informado". */
 function SelectOpcional({ id, valor, onChange, opcoes, vazioLabel }) {
   return (
     <Select value={valor || NENHUM} onValueChange={(novo) => onChange(novo === NENHUM ? '' : novo)}>
@@ -77,6 +101,137 @@ function SelectOpcional({ id, valor, onChange, opcoes, vazioLabel }) {
         ))}
       </SelectContent>
     </Select>
+  );
+}
+
+/** Filtro de barra: some quando o estoque não tem nenhuma opção daquele campo. */
+function FiltroBarra({ label, valor, onChange, opcoes, className }) {
+  if (opcoes.length === 0) return null;
+  return (
+    <Select value={valor || TODOS} onValueChange={(novo) => onChange(novo === TODOS ? '' : novo)}>
+      <SelectTrigger size="sm" aria-label={label} className={className}>
+        <SelectValue />
+      </SelectTrigger>
+      <SelectContent>
+        <SelectItem value={TODOS}>{label}: todos</SelectItem>
+        {opcoes.map(({ value, label: rotulo }) => (
+          <SelectItem key={value} value={value}>
+            {rotulo}
+          </SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
+  );
+}
+
+/** Fotos do veículo: envio, remoção e escolha da capa. */
+function EditorFotos({ fotos, veiculoId, api, onChange }) {
+  const arquivoRef = useRef(null);
+  const [enviando, setEnviando] = useState(false);
+  const [erro, setErro] = useState('');
+
+  const enviar = async (event) => {
+    const arquivos = [...(event.target.files || [])];
+    event.target.value = '';
+    if (!arquivos.length) return;
+
+    setEnviando(true);
+    setErro('');
+    try {
+      const novas = [];
+      for (const arquivo of arquivos) {
+        if (!arquivo.type.startsWith('image/')) {
+          setErro('Envie apenas imagens.');
+          continue;
+        }
+        if (arquivo.size > 8 * 1024 * 1024) {
+          setErro(`"${arquivo.name}" tem mais de 8 MB.`);
+          continue;
+        }
+        novas.push(await api.uploadFotoVeiculo(veiculoId, arquivo));
+      }
+      if (novas.length) onChange([...fotos, ...novas]);
+    } catch (error) {
+      setErro(`Falha no envio: ${error.message}`);
+    } finally {
+      setEnviando(false);
+    }
+  };
+
+  const remover = async (path) => {
+    onChange(fotos.filter((f) => f.path !== path));
+    api.deleteFotoVeiculo(path).catch(() => {});
+  };
+
+  const definirCapa = (path) => {
+    const escolhida = fotos.find((f) => f.path === path);
+    onChange([escolhida, ...fotos.filter((f) => f.path !== path)]);
+  };
+
+  return (
+    <div className="flex flex-col gap-3">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <h3 className="flex items-center gap-2 text-[0.95rem] font-bold tracking-tight">
+          <Images className="size-4 text-brand-strong dark:text-brand" />
+          Fotos do veículo
+        </h3>
+        <div className="flex items-center gap-3">
+          <span className="text-[0.76rem] text-muted-foreground">A primeira foto é a capa</span>
+          <input ref={arquivoRef} type="file" accept="image/*" multiple onChange={enviar} hidden />
+          <Button type="button" variant="secondary" size="sm" onClick={() => arquivoRef.current?.click()} disabled={enviando}>
+            {enviando ? <LoaderCircle className="animate-spin" /> : <Plus />}
+            {enviando ? 'Enviando...' : 'Adicionar fotos'}
+          </Button>
+        </div>
+      </div>
+
+      {erro && (
+        <Alert variant="destructive">
+          <AlertDescription>{erro}</AlertDescription>
+        </Alert>
+      )}
+
+      {fotos.length === 0 ? (
+        <p className="rounded-xl border border-dashed border-border py-6 text-center text-[0.85rem] text-muted-foreground">
+          Nenhuma foto enviada. As fotos aparecem na galeria do estoque.
+        </p>
+      ) : (
+        <ul className="grid grid-cols-3 gap-2.5 sm:grid-cols-5">
+          {fotos.map((foto, indice) => (
+            <li key={foto.path} className="group relative aspect-[4/3] overflow-hidden rounded-lg border border-border">
+              <img src={api.fotoUrl(foto.path)} alt="" className="size-full object-cover" />
+              {indice === 0 && (
+                <span className="absolute top-1 left-1 rounded bg-brand-strong px-1.5 py-0.5 text-[0.65rem] font-bold text-white">
+                  Capa
+                </span>
+              )}
+              <div className="absolute inset-0 flex items-center justify-center gap-1.5 bg-[#0b0f14]/60 opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100">
+                {indice > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => definirCapa(foto.path)}
+                    className="grid size-8 place-items-center rounded-md bg-white/15 text-white hover:bg-white/25"
+                    aria-label="Definir como capa"
+                    title="Definir como capa"
+                  >
+                    <Star className="size-4" />
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={() => remover(foto.path)}
+                  className="grid size-8 place-items-center rounded-md bg-white/15 text-white hover:bg-destructive"
+                  aria-label="Remover foto"
+                  title="Remover foto"
+                >
+                  <Trash2 className="size-4" />
+                </button>
+              </div>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
   );
 }
 
@@ -170,12 +325,19 @@ function EditorGastos({ gastos, preco, onChange }) {
 }
 
 export default function Estoque({ veiculos, fichas, api, onRecarregar }) {
-  const [editando, setEditando] = useState(null); // objeto do formulário ou null
+  const [editando, setEditando] = useState(null);
   const [salvando, setSalvando] = useState(false);
   const [erro, setErro] = useState('');
-  const [filtroStatus, setFiltroStatus] = useState('');
+  const [busca, setBusca] = useState('');
+  const [filtros, setFiltros] = useState(filtroInicial);
+  const [ordenacao, setOrdenacao] = useState('nome');
+  const [visao, setVisao] = useState(() => localStorage.getItem('crm-estoque-visao') || 'galeria');
 
-  const interessados = useMemo(() => {
+  useEffect(() => {
+    localStorage.setItem('crm-estoque-visao', visao);
+  }, [visao]);
+
+  const fichasPorVeiculo = useMemo(() => {
     const mapa = {};
     fichas.forEach((f) => {
       if (f.veiculo_id) mapa[f.veiculo_id] = (mapa[f.veiculo_id] || 0) + 1;
@@ -183,12 +345,40 @@ export default function Estoque({ veiculos, fichas, api, onRecarregar }) {
     return mapa;
   }, [fichas]);
 
-  const listados = filtroStatus ? veiculos.filter((v) => v.status === filtroStatus) : veiculos;
-  const gastoTotalEstoque = veiculos.reduce((soma, v) => soma + totalGastos(v), 0);
+  // Só oferece filtros que existem no estoque atual.
+  const opcoes = useMemo(() => {
+    const presentes = (campo, ordem) => {
+      const usados = new Set(veiculos.map((v) => v[campo]).filter(Boolean));
+      return ordem.filter((item) => usados.has(item)).map((item) => ({ value: item, label: item }));
+    };
+    return {
+      carrocerias: presentes('carroceria', CARROCERIAS),
+      combustiveis: presentes('combustivel', COMBUSTIVEIS),
+      cambios: presentes('cambio', CAMBIOS),
+    };
+  }, [veiculos]);
+
+  const listados = useMemo(() => {
+    const termo = busca.trim().toLowerCase();
+    return veiculos
+      .filter((veiculo) => {
+        if (termo && !textoBusca(veiculo).includes(termo)) return false;
+        if (filtros.status && veiculo.status !== filtros.status) return false;
+        if (filtros.carroceria && veiculo.carroceria !== filtros.carroceria) return false;
+        if (filtros.combustivel && veiculo.combustivel !== filtros.combustivel) return false;
+        if (filtros.cambio && veiculo.cambio !== filtros.cambio) return false;
+        return true;
+      })
+      .sort(ORDENACOES[ordenacao].comparar);
+  }, [veiculos, busca, filtros, ordenacao]);
+
+  const temFiltro = Boolean(busca.trim()) || Object.values(filtros).some(Boolean);
+  const valorListado = listados.reduce((soma, v) => soma + (v.preco_centavos || 0), 0);
+  const gastoListado = listados.reduce((soma, v) => soma + totalGastos(v), 0);
 
   const abrirNovo = () => {
     setErro('');
-    setEditando({ ...vazio, gastos: [] });
+    setEditando({ ...vazio, gastos: [], fotos: [] });
   };
 
   const abrirEdicao = (veiculo) => {
@@ -208,6 +398,7 @@ export default function Estoque({ veiculos, fichas, api, onRecarregar }) {
       status: veiculo.status,
       observacoes: veiculo.observacoes || '',
       gastos: gastosDe(veiculo).map((g) => ({ ...g })),
+      fotos: fotosDe(veiculo).map((f) => ({ ...f })),
     });
   };
 
@@ -231,6 +422,7 @@ export default function Estoque({ veiculos, fichas, api, onRecarregar }) {
         status: editando.status,
         observacoes: editando.observacoes.trim() || null,
         gastos: editando.gastos.filter((g) => g.valor_centavos > 0 || g.descricao.trim()),
+        fotos: editando.fotos,
       });
       setEditando(null);
       await onRecarregar();
@@ -255,113 +447,137 @@ export default function Estoque({ veiculos, fichas, api, onRecarregar }) {
     }));
 
   const definir = (chave) => (valor) => setEditando((atual) => ({ ...atual, [chave]: valor }));
+  const setFiltro = (chave) => (valor) => setFiltros((atual) => ({ ...atual, [chave]: valor }));
+
+  const propsVisao = { veiculos: listados, fichasPorVeiculo, url: api.fotoUrl, onEditar: abrirEdicao, onExcluir: excluir };
 
   return (
     <div className="flex flex-col gap-6">
       <PageHeading
         titulo="Estoque de carros"
-        descricao={`${veiculos.length} veículo${veiculos.length === 1 ? '' : 's'} · ${fmtBRL(gastoTotalEstoque)} em gastos lançados`}
+        descricao={
+          temFiltro
+            ? `${listados.length} de ${veiculos.length} veículos · ${fmtBRL(valorListado)} no filtro atual`
+            : `${veiculos.length} veículos · ${fmtBRL(valorListado)} em estoque · ${fmtBRL(gastoListado)} em gastos`
+        }
       >
-        <Select
-          value={filtroStatus || TODOS}
-          onValueChange={(valor) => setFiltroStatus(valor === TODOS ? '' : valor)}
-        >
-          <SelectTrigger size="sm" aria-label="Filtrar estoque" className="w-[10.5rem]">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value={TODOS}>Todos</SelectItem>
-            {Object.entries(STATUS_VEICULO).map(([valor, meta]) => (
-              <SelectItem key={valor} value={valor}>
-                {meta.label}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
         <Button variant="brand" size="sm" onClick={abrirNovo}>
           <Plus /> Novo veículo
         </Button>
       </PageHeading>
 
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-        {listados.map((veiculo) => {
-          const meta = STATUS_VEICULO[veiculo.status] || STATUS_VEICULO.disponivel;
-          const qtd = interessados[veiculo.id] || 0;
-          const gastos = totalGastos(veiculo);
-          const tecnica = fichaTecnica(veiculo);
-          return (
-            <Card key={veiculo.id} className="group transition-shadow hover:shadow-lift">
-              <CardContent className="flex flex-col gap-3 py-5">
-                <div className="flex items-center justify-between gap-3">
-                  <Badge variant="outline" className={CORES[meta.cor].pill}>
-                    {meta.label}
-                  </Badge>
-                  <div className="flex gap-1 opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100">
-                    <Button
-                      variant="ghost"
-                      size="icon-sm"
-                      onClick={() => abrirEdicao(veiculo)}
-                      aria-label={`Editar ${veiculo.nome}`}
-                    >
-                      <Pencil />
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="icon-sm"
-                      onClick={() => excluir(veiculo)}
-                      aria-label={`Excluir ${veiculo.nome}`}
-                      className="text-destructive hover:bg-destructive/10"
-                    >
-                      <Trash2 />
-                    </Button>
-                  </div>
-                </div>
+      <Card className="flex flex-col gap-3 p-3">
+        <div className="flex flex-wrap items-center gap-2.5">
+          <div className="relative min-w-[15rem] flex-1">
+            <Search className="pointer-events-none absolute top-1/2 left-3.5 size-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              type="search"
+              className="h-9 pr-9 pl-10 [&::-webkit-search-cancel-button]:hidden"
+              placeholder="Buscar carro por modelo, placa, cor, câmbio..."
+              value={busca}
+              onChange={(event) => setBusca(event.target.value)}
+              aria-label="Buscar veículo no estoque"
+            />
+            {busca && (
+              <button
+                type="button"
+                className="absolute top-1/2 right-2 grid size-6 -translate-y-1/2 place-items-center rounded-md text-muted-foreground hover:bg-secondary"
+                onClick={() => setBusca('')}
+                aria-label="Limpar busca"
+              >
+                <X className="size-3.5" />
+              </button>
+            )}
+          </div>
 
-                <div>
-                  <strong className="font-display block text-[1.02rem] leading-snug font-bold tracking-tight">
-                    {veiculo.nome}
-                  </strong>
-                  <span className="font-display mt-1 block text-xl font-extrabold text-brand-strong tabular-nums dark:text-brand">
-                    {fmtBRL(veiculo.preco_centavos)}
-                  </span>
-                </div>
+          <Select value={ordenacao} onValueChange={setOrdenacao}>
+            <SelectTrigger size="sm" aria-label="Ordenar estoque" className="w-[13rem]">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {Object.entries(ORDENACOES).map(([valor, { label }]) => (
+                <SelectItem key={valor} value={valor}>
+                  {label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
 
-                {tecnica && <span className="text-[0.8rem] font-semibold text-muted-foreground">{tecnica}</span>}
-
-                <div className="flex flex-wrap gap-x-4 gap-y-1 border-t border-border pt-3 text-[0.8rem] text-muted-foreground">
-                  <span className="font-mono">{veiculo.placa || 'Sem placa'}</span>
-                  <span>{anoCompleto(veiculo) || '—'}</span>
-                  <span>{veiculo.cor || '—'}</span>
-                  <span className="tabular-nums">{fmtKm(veiculo.km)}</span>
-                </div>
-
-                {gastos > 0 && (
-                  <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg bg-warning/8 px-3 py-2 text-[0.78rem]">
-                    <span className="font-semibold text-warning">
-                      {fmtBRL(gastos)} em gastos ({percentualGastos(veiculo)}%)
-                    </span>
-                    <span className="text-muted-foreground">
-                      Líquido <strong className="text-foreground tabular-nums">{fmtBRL(valorLiquido(veiculo))}</strong>
-                    </span>
-                  </div>
+          <div className="flex gap-1 rounded-lg bg-secondary p-1" role="group" aria-label="Modo de visualização">
+            {VISOES.map(({ id, label, icone: Icone }) => (
+              <button
+                key={id}
+                type="button"
+                onClick={() => setVisao(id)}
+                title={label}
+                aria-label={label}
+                aria-pressed={visao === id}
+                className={cn(
+                  'grid size-8 place-items-center rounded-md transition-colors outline-none focus-visible:ring-[3px] focus-visible:ring-ring/35',
+                  visao === id ? 'bg-card text-foreground shadow-xs' : 'text-muted-foreground hover:text-foreground',
                 )}
+              >
+                <Icone className="size-4" />
+              </button>
+            ))}
+          </div>
+        </div>
 
-                {qtd > 0 && (
-                  <span className="text-[0.78rem] font-semibold text-brand-strong dark:text-brand">
-                    {qtd} ficha{qtd > 1 ? 's' : ''} vinculada{qtd > 1 ? 's' : ''}
-                  </span>
-                )}
-              </CardContent>
-            </Card>
-          );
-        })}
+        <div className="flex flex-wrap items-center gap-2.5">
+          <FiltroBarra
+            label="Situação"
+            valor={filtros.status}
+            onChange={setFiltro('status')}
+            opcoes={Object.entries(STATUS_VEICULO).map(([value, meta]) => ({ value, label: meta.label }))}
+            className="w-[10.5rem]"
+          />
+          <FiltroBarra
+            label="Carroceria"
+            valor={filtros.carroceria}
+            onChange={setFiltro('carroceria')}
+            opcoes={opcoes.carrocerias}
+            className="w-[11rem]"
+          />
+          <FiltroBarra
+            label="Combustível"
+            valor={filtros.combustivel}
+            onChange={setFiltro('combustivel')}
+            opcoes={opcoes.combustiveis}
+            className="w-[11.5rem]"
+          />
+          <FiltroBarra
+            label="Câmbio"
+            valor={filtros.cambio}
+            onChange={setFiltro('cambio')}
+            opcoes={opcoes.cambios}
+            className="w-[10.5rem]"
+          />
+          {temFiltro && (
+            <Button
+              variant="link"
+              size="sm"
+              onClick={() => {
+                setFiltros(filtroInicial);
+                setBusca('');
+              }}
+            >
+              <FilterX /> Limpar filtros
+            </Button>
+          )}
+        </div>
+      </Card>
 
-        {listados.length === 0 && (
-          <p className="col-span-full rounded-xl border border-dashed border-border py-14 text-center text-muted-foreground">
-            Nenhum veículo neste filtro.
-          </p>
-        )}
-      </div>
+      {listados.length === 0 ? (
+        <p className="rounded-xl border border-dashed border-border py-14 text-center text-muted-foreground">
+          {temFiltro ? 'Nenhum veículo encontrado com esses critérios.' : 'Nenhum veículo cadastrado no estoque.'}
+        </p>
+      ) : (
+        <>
+          {visao === 'galeria' && <VisaoGaleria {...propsVisao} />}
+          {visao === 'grade' && <VisaoGrade {...propsVisao} />}
+          {visao === 'lista' && <VisaoLista {...propsVisao} />}
+        </>
+      )}
 
       <Dialog open={Boolean(editando)} onOpenChange={(aberto) => !aberto && setEditando(null)}>
         <DialogContent className="max-w-3xl">
@@ -369,7 +585,7 @@ export default function Estoque({ veiculos, fichas, api, onRecarregar }) {
             <form onSubmit={salvar} className="flex flex-col gap-5">
               <DialogHeader>
                 <DialogTitle>{editando.id ? 'Editar veículo' : 'Novo veículo'}</DialogTitle>
-                <DialogDescription>Ficha técnica, situação e gastos lançados no veículo.</DialogDescription>
+                <DialogDescription>Ficha técnica, fotos, situação e gastos lançados no veículo.</DialogDescription>
               </DialogHeader>
 
               <div className="flex flex-col gap-2">
@@ -480,6 +696,15 @@ export default function Estoque({ veiculos, fichas, api, onRecarregar }) {
                   placeholder="Detalhes internos do veículo"
                 />
               </div>
+
+              <Separator />
+
+              <EditorFotos
+                fotos={editando.fotos}
+                veiculoId={editando.id}
+                api={api}
+                onChange={definir('fotos')}
+              />
 
               <Separator />
 

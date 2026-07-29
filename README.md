@@ -89,14 +89,17 @@ VITE_SUPABASE_ANON_KEY=sua-chave-anon-publica
 
 O CRM roda em **`/crm/`** (ex.: `http://localhost:5173/crm/`) e inclui: dashboard com KPIs (fichas, aprovações, vendas e valores), lista de fichas com filtros (região, idade, carro, entrada, instituição, indicação) e busca global (protocolo, CPF, celular, carro, nome), esteira kanban com arrastar-e-soltar e ações em massa, estoque de veículos, follow-up com histórico e indicadores de tempo de espera, e tema claro/escuro.
 
-Cada veículo do estoque tem ficha técnica (carroceria, combustível, câmbio, ano de fabricação e do modelo) e uma **lista editável de gastos** — mecânica, estética, peças, pneus, documentação. Os gastos são descontados do preço de venda e viram o *valor líquido* do carro, somado no dashboard.
+Cada veículo do estoque tem ficha técnica (carroceria, combustível, câmbio, ano de fabricação e do modelo), **fotos** e uma **lista editável de gastos** — mecânica, estética, peças, pneus, documentação. Os gastos são descontados do preço de venda e viram o *valor líquido* do carro, somado no dashboard.
+
+O estoque tem três modos de visualização (**galeria com foto**, **quadro** e **lista**), busca só de veículos (modelo, placa, cor, câmbio, ano), filtros por situação, carroceria, combustível e câmbio, e ordenação por nome, preço, km, data, gasto ou valor líquido. O modo escolhido fica salvo no navegador.
 
 Para ativar com dados reais:
 
 1. No **SQL Editor** do Supabase, execute [`supabase/schema-crm.sql`](supabase/schema-crm.sql) (cria `veiculos` com o estoque atual, `followups` e os campos de negociação em `propostas`).
 2. Execute também [`supabase/schema-crm-v3.sql`](supabase/schema-crm-v3.sql) — ficha técnica e gastos do veículo, mais a política que libera a **vitrine pública** (o site enxerga só carros disponíveis e só as colunas da vitrine; gastos e observações internas continuam invisíveis).
-3. Em **Authentication → Users → Add user**, crie o e-mail/senha de cada pessoa da equipe (marque "Auto Confirm User").
-4. Acesse `/crm/` e faça login.
+3. Execute [`supabase/schema-crm-v4.sql`](supabase/schema-crm-v4.sql) — fotos dos veículos e o bucket `veiculos` no Storage. Esse bucket é **público** por ser material de vitrine; não envie documento de cliente para ele (documentos vão no bucket privado `anexos`, pela ficha).
+4. Em **Authentication → Users → Add user**, crie o e-mail/senha de cada pessoa da equipe (marque "Auto Confirm User").
+5. Acesse `/crm/` e faça login.
 
 Enquanto a fase 3 não roda, o formulário simplesmente não mostra o seletor de veículos — nada quebra.
 
