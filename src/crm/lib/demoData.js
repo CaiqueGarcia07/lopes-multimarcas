@@ -8,6 +8,36 @@ const diasAtras = (dias, hora = 10) => {
   return d.toISOString();
 };
 
+// Ficha técnica fictícia, distribuída entre os veículos do estoque de exemplo.
+const fichaTecnicaDemo = [
+  { carroceria: 'Hatch', combustivel: 'Flex', cambio: 'Manual' },
+  { carroceria: 'Sedan', combustivel: 'Flex', cambio: 'Automático' },
+  { carroceria: 'SUV', combustivel: 'Flex', cambio: 'Automático' },
+  { carroceria: 'Hatch', combustivel: 'Flex', cambio: 'Automatizado' },
+];
+
+const gasto = (id, tipo, descricao, reais, diasAtrasDe) => ({
+  id,
+  tipo,
+  descricao,
+  valor_centavos: reais * 100,
+  data: diasAtras(diasAtrasDe).slice(0, 10),
+});
+
+// Gastos de exemplo em alguns veículos, para as métricas terem o que mostrar.
+const gastosDemo = {
+  0: [gasto('g-1', 'Revisão', 'Revisão completa de entrega', 780, 30), gasto('g-2', 'Pneus', 'Jogo de 4 pneus', 2400, 25)],
+  2: [gasto('g-3', 'Mecânica', 'Troca de embreagem', 1850, 20)],
+  3: [
+    gasto('g-4', 'Estética / Funilaria', 'Polimento e retoque de para-choque', 950, 18),
+    gasto('g-5', 'Peças', 'Kit de correia dentada', 640, 15),
+  ],
+  6: [gasto('g-6', 'Elétrica', 'Bateria e alternador', 1290, 12)],
+  8: [gasto('g-7', 'Mecânica', 'Suspensão dianteira', 1600, 10), gasto('g-8', 'Documentação', 'Transferência e licenciamento', 430, 8)],
+  9: [gasto('g-9', 'Estética / Funilaria', 'Higienização interna', 380, 6)],
+  12: [gasto('g-10', 'Revisão', 'Troca de óleo e filtros', 520, 5)],
+};
+
 export const demoVeiculos = [
   { nome: 'FIAT / ARGO DRIVE 1.0 6V FLEX', placa: 'TCM8D92', km: 57653, preco_centavos: 7390000, cor: 'Branco', ano_modelo: '2025' },
   { nome: 'FIAT / ARGO DRIVE 1.0 6V FLEX', placa: 'TCL2A96', km: 57301, preco_centavos: 7390000, cor: 'Cinza', ano_modelo: '2024/2025' },
@@ -31,6 +61,9 @@ export const demoVeiculos = [
   observacoes: null,
   criado_em: diasAtras(40),
   atualizado_em: diasAtras(40),
+  ...fichaTecnicaDemo[i % fichaTecnicaDemo.length],
+  ano_fabricacao: String(Number(String(v.ano_modelo).slice(0, 4)) - 1),
+  gastos: gastosDemo[i] || [],
   ...v,
 }));
 

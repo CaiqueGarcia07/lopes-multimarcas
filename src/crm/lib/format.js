@@ -50,7 +50,7 @@ export const STATUS_META = {
   contatado: { label: 'Contatado', cor: 'purple', esteira: true },
   aprovado: { label: 'Aprovada', cor: 'teal', esteira: true },
   convertido: { label: 'Concluída (venda)', cor: 'green', esteira: true },
-  reprovado: { label: 'Reprovada', cor: 'red', esteira: false },
+  reprovado: { label: 'Reprovada', cor: 'red', esteira: true },
   arquivado: { label: 'Arquivada', cor: 'gray', esteira: false },
 };
 

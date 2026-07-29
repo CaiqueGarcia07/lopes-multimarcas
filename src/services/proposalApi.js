@@ -48,6 +48,8 @@ async function submitToSupabase(payload, protocolo) {
     celular: payload.residencia.celular,
     email: payload.cliente.email,
     renda_mensal_centavos: payload.trabalho.rendaMensalCentavos,
+    // Já entra no CRM vinculada ao carro que o cliente escolheu na vitrine.
+    veiculo_id: payload.veiculoInteresse?.id ?? null,
     dados: payload,
     consentimento_autorizado: payload.consentimento.autorizado,
     consentimento_texto_versao: payload.consentimento.textoVersao,

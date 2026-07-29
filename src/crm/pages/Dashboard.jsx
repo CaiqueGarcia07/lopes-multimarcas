@@ -5,8 +5,18 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card.j
 import { Skeleton } from '@/components/ui/skeleton.jsx';
 import { cn } from '@/lib/utils.js';
 
+import { BarrasHorizontais, BarrasVerticais, Destaque } from '../components/Charts.jsx';
 import { EsperaPill, PageHeading, StatusPill } from '../components/Pills.jsx';
 import { STATUS_META, corDoStatus, esperaInfo, fmtBRL, fmtDate, nomeDa } from '../lib/format.js';
+import { TIPOS_GASTO, gastosDe, totalGastos } from '../lib/veiculo.js';
+
+const MESES = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
+
+const STATUS_ESTOQUE = [
+  ['disponivel', 'Disponível'],
+  ['reservado', 'Reservado'],
+  ['vendido', 'Vendido'],
+];
 
 const TONS = {
   brand: 'from-brand/18 to-brand/5 text-brand-strong dark:text-brand ring-brand/20',
@@ -31,7 +41,7 @@ function Kpi({ icon: Icon, label, valor, detalhe, tom = 'brand' }) {
   );
 }
 
-export default function Dashboard({ fichas, carregando, onAbrirFicha, onIrPara }) {
+export default function Dashboard({ fichas, veiculos = [], carregando, onAbrirFicha, onIrPara }) {
   const total = fichas.length;
   const novas = fichas.filter((f) => f.status === 'novo').length;
   const aprovadas = fichas.filter((f) => f.status === 'aprovado');
@@ -46,6 +56,43 @@ export default function Dashboard({ fichas, carregando, onAbrirFicha, onIrPara }
     .filter((f) => esperaInfo(f).nivel === 'atrasado')
     .sort((a, b) => esperaInfo(b).dias - esperaInfo(a).dias)
     .slice(0, 6);
+
+  // Fichas concluídas nos últimos 6 meses, pela data da última movimentação.
+  const vendasPorMes = (() => {
+    const hoje = new Date();
+    const meses = Array.from({ length: 6 }, (_, i) => {
+      const d = new Date(hoje.getFullYear(), hoje.getMonth() - (5 - i), 1);
+      return {
+        chave: `${d.getFullYear()}-${d.getMonth()}`,
+        rotulo: MESES[d.getMonth()],
+        rotuloCompleto: `${MESES[d.getMonth()]}/${String(d.getFullYear()).slice(2)}`,
+        valor: 0,
+      };
+    });
+    vendas.forEach((ficha) => {
+      const d = new Date(ficha.atualizado_em || ficha.criado_em);
+      const mes = meses.find((m) => m.chave === `${d.getFullYear()}-${d.getMonth()}`);
+      if (mes) mes.valor += 1;
+    });
+    return meses;
+  })();
+
+  const estoquePorSituacao = STATUS_ESTOQUE.map(([valor, rotulo]) => ({
+    rotulo,
+    valor: veiculos.filter((v) => v.status === valor).reduce((soma, v) => soma + (v.preco_centavos || 0), 0),
+  }));
+  const valorEstoqueDisponivel = estoquePorSituacao[0].valor;
+
+  const gastosPorTipo = TIPOS_GASTO.map((tipo) => ({
+    rotulo: tipo,
+    valor: veiculos.reduce(
+      (soma, v) => soma + gastosDe(v).filter((g) => g.tipo === tipo).reduce((s, g) => s + (g.valor_centavos || 0), 0),
+      0,
+    ),
+  }))
+    .filter((item) => item.valor > 0)
+    .sort((a, b) => b.valor - a.valor);
+  const gastoTotal = veiculos.reduce((soma, v) => soma + totalGastos(v), 0);
 
   const porStatus = Object.entries(STATUS_META).map(([status, meta]) => ({
     status,
@@ -88,6 +135,61 @@ export default function Dashboard({ fichas, carregando, onAbrirFicha, onIrPara }
           />
         </div>
       )}
+
+      <div className="grid gap-4 xl:grid-cols-3">
+        <Card>
+          <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-3">
+            <CardTitle>Fichas concluídas</CardTitle>
+            <span className="text-[0.78rem] text-muted-foreground">Últimos 6 meses</span>
+          </CardHeader>
+          <CardContent className="flex flex-col gap-5">
+            <Destaque valor={vendas.length} rotulo={`vendas fechadas · conversão de ${conversao}%`} />
+            <BarrasVerticais
+              titulo="Fichas concluídas por mês"
+              dados={vendasPorMes}
+              cor="var(--brand-strong)"
+              formatar={(v) => String(v)}
+              vazio="Nenhuma ficha concluída nos últimos 6 meses."
+            />
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-3">
+            <CardTitle>Valor do estoque</CardTitle>
+            <span className="text-[0.78rem] text-muted-foreground">{veiculos.length} veículos</span>
+          </CardHeader>
+          <CardContent className="flex flex-col gap-5">
+            <Destaque valor={fmtBRL(valorEstoqueDisponivel)} rotulo="em carros disponíveis para venda" />
+            <BarrasHorizontais
+              titulo="Valor do estoque por situação"
+              dados={estoquePorSituacao}
+              cor="var(--success)"
+              formatar={fmtBRL}
+              vazio="Nenhum veículo cadastrado no estoque."
+            />
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-3">
+            <CardTitle>Gastos com manutenção</CardTitle>
+            <Button variant="link" size="sm" className="h-auto p-0" onClick={() => onIrPara('estoque')}>
+              Ver estoque <ArrowRight className="size-3.5" />
+            </Button>
+          </CardHeader>
+          <CardContent className="flex flex-col gap-5">
+            <Destaque valor={fmtBRL(gastoTotal)} rotulo="investidos nos veículos do estoque" />
+            <BarrasHorizontais
+              titulo="Gastos com manutenção por tipo"
+              dados={gastosPorTipo}
+              cor="var(--warning)"
+              formatar={fmtBRL}
+              vazio="Nenhum gasto lançado nos veículos."
+            />
+          </CardContent>
+        </Card>
+      </div>
 
       <div className="grid gap-4 xl:grid-cols-[minmax(0,1.15fr)_minmax(0,1fr)]">
         <Card>

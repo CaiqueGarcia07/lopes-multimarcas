@@ -104,11 +104,22 @@ const currencyToCents = (value) => {
   return digits ? Number(digits) : null;
 };
 
-export function buildProposalPayload(form) {
+export function buildProposalPayload(form, veiculo = null) {
   return {
-    schemaVersion: '1.0',
+    schemaVersion: '1.1',
     origem: 'site-lopes-multimarcas',
     enviadoEm: new Date().toISOString(),
+    // Carro escolhido pelo cliente na vitrine; null quando ele ainda não decidiu.
+    veiculoInteresse: veiculo
+      ? {
+          id: veiculo.id,
+          nome: veiculo.nome,
+          precoCentavos: veiculo.preco_centavos ?? null,
+          cor: emptyToNull(veiculo.cor),
+          carroceria: emptyToNull(veiculo.carroceria),
+          anoModelo: emptyToNull(veiculo.ano_modelo),
+        }
+      : null,
     cliente: {
       nome: emptyToNull(form.nome),
       rg: emptyToNull(form.rg),
@@ -125,6 +136,7 @@ export function buildProposalPayload(form) {
     residencia: {
       logradouro: emptyToNull(form.ruaResidencial),
       numero: emptyToNull(form.numeroResidencial),
+      complemento: emptyToNull(form.complementoResidencial),
       bairro: emptyToNull(form.bairroResidencial),
       cidade: emptyToNull(form.cidadeResidencial),
       uf: emptyToNull(form.ufResidencial),

@@ -4,6 +4,7 @@ import {
   Check,
   CheckCircle2,
   BriefcaseBusiness,
+  CarFront,
   ChevronRight,
   Circle,
   CircleDollarSign,
@@ -49,6 +50,7 @@ import {
 import { Separator } from '@/components/ui/separator.jsx';
 
 import { buscarEnderecoPorCep } from './services/cepApi.js';
+import { anoDoVeiculo, listarVitrine } from './services/estoqueApi.js';
 import { submitProposal } from './services/proposalApi.js';
 import {
   buildProposalPayload,
@@ -66,6 +68,14 @@ import {
 
 const ASSET = import.meta.env.BASE_URL;
 
+// O Radix Select reserva a string vazia para "sem valor".
+const SEM_VEICULO = '__sem_veiculo__';
+
+const fmtBRL = (centavos) =>
+  centavos == null
+    ? '—'
+    : new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(centavos / 100);
+
 const initialForm = {
   nome: '',
   rg: '',
@@ -79,8 +89,11 @@ const initialForm = {
   email: '',
   temCnh: '',
 
+  veiculoId: '',
+
   ruaResidencial: '',
   numeroResidencial: '',
+  complementoResidencial: '',
   bairroResidencial: '',
   cidadeResidencial: '',
   ufResidencial: '',
@@ -117,7 +130,28 @@ const initialForm = {
   website: '',
 };
 
-const requiredFields = ['cpf', 'dataNascimento', 'temCnh', 'celular', 'consentimento'];
+// Endereço do lead é obrigatório por inteiro — só o complemento é opcional.
+const CAMPOS_ENDERECO = [
+  ['cepResidencial', 'Informe o CEP.'],
+  ['ruaResidencial', 'Informe a rua.'],
+  ['numeroResidencial', 'Informe o número.'],
+  ['bairroResidencial', 'Informe o bairro.'],
+  ['cidadeResidencial', 'Informe a cidade.'],
+  ['ufResidencial', 'Informe a UF.'],
+];
+
+const enderecoCompleto = (form) => CAMPOS_ENDERECO.every(([campo]) => String(form[campo] || '').trim());
+
+// Itens do checklist lateral: cada um vale uma fatia do progresso.
+const OBRIGATORIOS = [
+  ['Nome completo', (f) => Boolean(f.nome.trim())],
+  ['CPF', (f) => Boolean(f.cpf)],
+  ['Data de nascimento', (f) => Boolean(f.dataNascimento)],
+  ['Possui CNH?', (f) => Boolean(f.temCnh)],
+  ['Telefone celular', (f) => Boolean(f.celular)],
+  ['Endereço completo', enderecoCompleto],
+  ['Autorização de uso dos dados', (f) => Boolean(f.consentimento)],
+];
 
 const CAMPOS_TELEFONE = [
   'telefoneFixoResidencial',
@@ -239,28 +273,36 @@ export default function App() {
   const [result, setResult] = useState(null);
   const [protocolCopied, setProtocolCopied] = useState(false);
   const [cepBuscando, setCepBuscando] = useState({});
+  const [vitrine, setVitrine] = useState([]);
   const confirmButtonRef = useRef(null);
 
-  const progress = useMemo(() => {
-    const completed = requiredFields.filter((field) => Boolean(form[field])).length;
-    return Math.round((completed / requiredFields.length) * 100);
-  }, [form]);
+  useEffect(() => {
+    listarVitrine().then(setVitrine);
+  }, []);
 
-  const requiredChecklist = [
-    ['CPF', Boolean(form.cpf)],
-    ['Data de nascimento', Boolean(form.dataNascimento)],
-    ['Possui CNH?', Boolean(form.temCnh)],
-    ['Telefone celular', Boolean(form.celular)],
-    ['Autorização de uso dos dados', Boolean(form.consentimento)],
-  ];
+  const veiculoEscolhido = vitrine.find((v) => v.id === form.veiculoId) || null;
+
+  const requiredChecklist = useMemo(
+    () => OBRIGATORIOS.map(([label, pronto]) => [label, pronto(form)]),
+    [form],
+  );
+
+  const progress = useMemo(() => {
+    const completed = requiredChecklist.filter(([, done]) => done).length;
+    return Math.round((completed / requiredChecklist.length) * 100);
+  }, [requiredChecklist]);
 
   const anyFilled = (fields) => fields.some((field) => Boolean(form[field]));
   const sectionStatus = {
     pessoais: {
-      pending: ['cpf', 'dataNascimento', 'temCnh'].filter((field) => !form[field]).length,
+      pending: ['nome', 'cpf', 'dataNascimento', 'temCnh'].filter((field) => !String(form[field]).trim()).length,
       complete: true,
     },
-    residenciais: { pending: form.celular ? 0 : 1, complete: true },
+    residenciais: {
+      pending:
+        CAMPOS_ENDERECO.filter(([campo]) => !String(form[campo] || '').trim()).length + (form.celular ? 0 : 1),
+      complete: true,
+    },
     profissionais: {
       complete: anyFilled(['nomeEmpresa', 'cargo', 'rendaMensal']),
       optional: true,
@@ -339,6 +381,12 @@ export default function App() {
   const validate = () => {
     const nextErrors = {};
 
+    if (!form.nome.trim()) nextErrors.nome = 'Informe o nome completo.';
+
+    CAMPOS_ENDERECO.forEach(([campo, mensagem]) => {
+      if (!String(form[campo] || '').trim()) nextErrors[campo] = mensagem;
+    });
+
     if (!form.cpf) nextErrors.cpf = 'Informe o CPF.';
     else if (!validateCPF(form.cpf)) nextErrors.cpf = 'CPF inválido.';
 
@@ -366,6 +414,8 @@ export default function App() {
     Object.keys(CAMPOS_POR_CEP).forEach((field) => {
       if (form[field] && onlyDigits(form[field]).length !== 8) nextErrors[field] = 'CEP incompleto.';
     });
+
+    if (form.ufResidencial && form.ufResidencial.length !== 2) nextErrors.ufResidencial = 'UF deve ter 2 letras.';
 
     CAMPOS_TELEFONE.filter((field) => field !== 'celular').forEach((field) => {
       if (form[field] && onlyDigits(form[field]).length < 10) nextErrors[field] = 'Telefone incompleto.';
@@ -433,7 +483,7 @@ export default function App() {
         return;
       }
 
-      const response = await submitProposal(buildProposalPayload(form), generateProtocol());
+      const response = await submitProposal(buildProposalPayload(form, veiculoEscolhido), generateProtocol());
       setResult(response);
       setStatus('success');
       setReviewOpen(false);
@@ -445,12 +495,14 @@ export default function App() {
   };
 
   const reviewItems = [
-    ['Cliente', form.nome || 'Não informado'],
+    ['Cliente', form.nome],
     ['CPF', form.cpf],
     ['Nascimento', form.dataNascimento.split('-').reverse().join('/')],
     ['Celular', form.celular],
+    ['Endereço', `${form.ruaResidencial}, ${form.numeroResidencial} — ${form.cidadeResidencial}/${form.ufResidencial}`],
     ['E-mail', form.email || 'Não informado'],
     ['CNH', form.temCnh],
+    ['Veículo', veiculoEscolhido ? veiculoEscolhido.nome : 'A definir com a equipe'],
   ];
 
   return (
@@ -651,6 +703,66 @@ export default function App() {
                 />
               </div>
 
+              {vitrine.length > 0 && (
+                <Card>
+                  <CardContent className="flex flex-col gap-4">
+                    <div className="flex items-center gap-3">
+                      <span className="grid size-11 shrink-0 place-items-center rounded-xl bg-gradient-to-br from-brand/18 to-brand/5 text-brand-strong ring-1 ring-brand/20">
+                        <CarFront className="size-5.5" aria-hidden="true" />
+                      </span>
+                      <span className="flex flex-col gap-0.5">
+                        <strong className="font-display text-[1.02rem] tracking-tight">Veículo de interesse</strong>
+                        <small className="text-[0.82rem] font-medium text-muted-foreground">
+                          Escolha o carro da nossa loja para simular o financiamento
+                        </small>
+                      </span>
+                    </div>
+
+                    <Select
+                      value={form.veiculoId || SEM_VEICULO}
+                      onValueChange={(valor) => setField('veiculoId', valor === SEM_VEICULO ? '' : valor)}
+                    >
+                      <SelectTrigger id="veiculoId" aria-label="Veículo de interesse">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value={SEM_VEICULO}>Ainda não escolhi / quero uma indicação</SelectItem>
+                        {vitrine.map((veiculo) => (
+                          <SelectItem key={veiculo.id} value={veiculo.id}>
+                            {veiculo.nome} · {fmtBRL(veiculo.preco_centavos)}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+
+                    {veiculoEscolhido && (
+                      <div className="rounded-xl border border-brand/25 bg-accent/50 p-5">
+                        <strong className="font-display block text-[1.05rem] leading-snug font-bold tracking-tight">
+                          {veiculoEscolhido.nome}
+                        </strong>
+                        <span className="font-display mt-1 block text-2xl font-extrabold text-brand-strong tabular-nums">
+                          {fmtBRL(veiculoEscolhido.preco_centavos)}
+                        </span>
+                        <dl className="mt-4 grid gap-3 border-t border-brand/20 pt-4 sm:grid-cols-3">
+                          {[
+                            ['Cor', veiculoEscolhido.cor],
+                            ['Carroceria', veiculoEscolhido.carroceria],
+                            ['Ano do modelo', anoDoVeiculo(veiculoEscolhido)],
+                          ].map(([rotulo, valor]) => (
+                            <div key={rotulo} className="flex flex-col gap-0.5">
+                              <dt className="text-[0.7rem] font-bold tracking-wide text-muted-foreground uppercase">
+                                {rotulo}
+                              </dt>
+                              <dd className="text-[0.92rem] font-semibold">{valor || '—'}</dd>
+                            </div>
+                          ))}
+                        </dl>
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              )}
+
               <Accordion
                 type="multiple"
                 defaultValue={['pessoais', 'residenciais']}
@@ -664,7 +776,7 @@ export default function App() {
                   badge={<SectionBadge {...sectionStatus.pessoais} />}
                 >
                   <div className="grid gap-5 sm:grid-cols-2">
-                    <Field label="Nome completo" name="nome" className="sm:col-span-2">
+                    <Field label="Nome completo" name="nome" required error={errors.nome} className="sm:col-span-2">
                       <Input
                         id="nome"
                         name="nome"
@@ -672,6 +784,8 @@ export default function App() {
                         onChange={updateField}
                         autoComplete="name"
                         placeholder="Digite seu nome completo"
+                        aria-invalid={Boolean(errors.nome)}
+                        aria-describedby={errors.nome ? 'nome-error' : undefined}
                       />
                     </Field>
                     <Field label="RG" name="rg">
@@ -804,6 +918,7 @@ export default function App() {
                     <Field
                       label="CEP"
                       name="cepResidencial"
+                      required
                       error={errors.cepResidencial}
                       hint="Preenchemos rua, bairro, cidade e UF automaticamente."
                     >
@@ -815,16 +930,24 @@ export default function App() {
                         onChange={updateField}
                       />
                     </Field>
-                    <Field label="Número" name="numeroResidencial">
+                    <Field label="Número" name="numeroResidencial" required error={errors.numeroResidencial}>
                       <Input
                         id="numeroResidencial"
                         name="numeroResidencial"
                         value={form.numeroResidencial}
                         onChange={updateField}
                         placeholder="123"
+                        aria-invalid={Boolean(errors.numeroResidencial)}
+                        aria-describedby={errors.numeroResidencial ? 'numeroResidencial-error' : undefined}
                       />
                     </Field>
-                    <Field label="Rua / Avenida" name="ruaResidencial" className="sm:col-span-2">
+                    <Field
+                      label="Rua / Avenida"
+                      name="ruaResidencial"
+                      required
+                      error={errors.ruaResidencial}
+                      className="sm:col-span-2"
+                    >
                       <Input
                         id="ruaResidencial"
                         name="ruaResidencial"
@@ -832,28 +955,43 @@ export default function App() {
                         onChange={updateField}
                         autoComplete="street-address"
                         placeholder="Nome da rua"
+                        aria-invalid={Boolean(errors.ruaResidencial)}
+                        aria-describedby={errors.ruaResidencial ? 'ruaResidencial-error' : undefined}
                       />
                     </Field>
-                    <Field label="Bairro" name="bairroResidencial">
+                    <Field label="Complemento" name="complementoResidencial">
+                      <Input
+                        id="complementoResidencial"
+                        name="complementoResidencial"
+                        value={form.complementoResidencial}
+                        onChange={updateField}
+                        placeholder="Apto, bloco, casa (opcional)"
+                      />
+                    </Field>
+                    <Field label="Bairro" name="bairroResidencial" required error={errors.bairroResidencial}>
                       <Input
                         id="bairroResidencial"
                         name="bairroResidencial"
                         value={form.bairroResidencial}
                         onChange={updateField}
                         placeholder="Bairro"
+                        aria-invalid={Boolean(errors.bairroResidencial)}
+                        aria-describedby={errors.bairroResidencial ? 'bairroResidencial-error' : undefined}
                       />
                     </Field>
-                    <div className="grid grid-cols-[minmax(0,1fr)_5.5rem] gap-4">
-                      <Field label="Cidade" name="cidadeResidencial">
+                    <div className="grid grid-cols-[minmax(0,1fr)_5.5rem] gap-4 sm:col-span-2">
+                      <Field label="Cidade" name="cidadeResidencial" required error={errors.cidadeResidencial}>
                         <Input
                           id="cidadeResidencial"
                           name="cidadeResidencial"
                           value={form.cidadeResidencial}
                           onChange={updateField}
                           placeholder="Cidade"
+                          aria-invalid={Boolean(errors.cidadeResidencial)}
+                          aria-describedby={errors.cidadeResidencial ? 'cidadeResidencial-error' : undefined}
                         />
                       </Field>
-                      <Field label="UF" name="ufResidencial">
+                      <Field label="UF" name="ufResidencial" required error={errors.ufResidencial}>
                         <Input
                           id="ufResidencial"
                           name="ufResidencial"
@@ -861,6 +999,8 @@ export default function App() {
                           onChange={updateField}
                           placeholder="SP"
                           maxLength={2}
+                          aria-invalid={Boolean(errors.ufResidencial)}
+                          aria-describedby={errors.ufResidencial ? 'ufResidencial-error' : undefined}
                         />
                       </Field>
                     </div>

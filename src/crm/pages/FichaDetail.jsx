@@ -8,13 +8,16 @@ import {
   FileText,
   Image as ImageIcon,
   LoaderCircle,
+  Lock,
   MessageSquarePlus,
   Paperclip,
   Phone,
+  ShieldCheck,
   Trash2,
 } from 'lucide-react';
 
 import { Alert, AlertDescription } from '@/components/ui/alert.jsx';
+import { Badge } from '@/components/ui/badge.jsx';
 import { Button } from '@/components/ui/button.jsx';
 import { Card, CardContent } from '@/components/ui/card.jsx';
 import { Input } from '@/components/ui/input.jsx';
@@ -121,6 +124,10 @@ export default function FichaDetail({ ficha, veiculos, api, onAtualizar, onFecha
   const trabalho = dados.trabalho || {};
   const referencias = dados.referencias || [];
   const idade = idadeDe(cliente.dataNascimento);
+
+  // Consentimento LGPD: registrado no envio da ficha, nunca editável no CRM.
+  const autorizado = ficha.consentimento_autorizado ?? dados.consentimento?.autorizado ?? false;
+  const versaoConsentimento = ficha.consentimento_texto_versao || dados.consentimento?.textoVersao || null;
 
   const [negociacao, setNegociacao] = useState({});
   const [followups, setFollowups] = useState([]);
@@ -283,6 +290,29 @@ export default function FichaDetail({ ficha, veiculos, api, onAtualizar, onFecha
                   {s.label}
                 </button>
               ))}
+            </div>
+          </Secao>
+
+          <Secao icone={ShieldCheck} titulo="Autorização de uso dos dados">
+            <div className="flex flex-wrap items-center gap-3 rounded-xl border border-emerald-500/25 bg-emerald-500/8 px-4 py-3.5">
+              <span className="grid size-9 shrink-0 place-items-center rounded-lg bg-emerald-500/15 text-emerald-600 dark:text-emerald-400">
+                <Lock className="size-4" />
+              </span>
+              <div className="min-w-0 flex-1">
+                <strong className="block text-[0.9rem]">
+                  {autorizado
+                    ? 'Cliente autorizou o uso dos dados para simulações'
+                    : 'Sem registro de autorização nesta ficha'}
+                </strong>
+                <span className="text-[0.78rem] text-muted-foreground">
+                  {autorizado
+                    ? `Aceite registrado em ${fmtDateTime(ficha.criado_em)}${versaoConsentimento ? ` · texto versão ${versaoConsentimento}` : ''} — análise de crédito e simulação de financiamento junto às instituições parceiras (LGPD, Lei nº 13.709/2018).`
+                    : 'Ficha anterior ao registro de consentimento ou importada manualmente.'}
+                </span>
+              </div>
+              <Badge variant="outline" className="border-border text-muted-foreground">
+                <Lock /> Somente leitura
+              </Badge>
             </div>
           </Secao>
 

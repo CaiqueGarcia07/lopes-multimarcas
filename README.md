@@ -19,6 +19,8 @@ Formulário e CRM compartilham a mesma base visual: **Tailwind CSS v4** + compon
 
 - Layout responsivo para desktop, tablet e celular
 - Fundo fotográfico com sobreposição escura e cartões em vidro fosco
+- Seletor do veículo de interesse, alimentado pelo estoque do CRM
+- Endereço preenchido automaticamente pelo CEP (ViaCEP)
 - Seções recolhíveis e indicador de progresso
 - Máscaras de CPF, CNPJ, CEP, telefone e valores em reais
 - Validação matemática de CPF e CNPJ
@@ -87,11 +89,16 @@ VITE_SUPABASE_ANON_KEY=sua-chave-anon-publica
 
 O CRM roda em **`/crm/`** (ex.: `http://localhost:5173/crm/`) e inclui: dashboard com KPIs (fichas, aprovações, vendas e valores), lista de fichas com filtros (região, idade, carro, entrada, instituição, indicação) e busca global (protocolo, CPF, celular, carro, nome), esteira kanban com arrastar-e-soltar e ações em massa, estoque de veículos, follow-up com histórico e indicadores de tempo de espera, e tema claro/escuro.
 
+Cada veículo do estoque tem ficha técnica (carroceria, combustível, câmbio, ano de fabricação e do modelo) e uma **lista editável de gastos** — mecânica, estética, peças, pneus, documentação. Os gastos são descontados do preço de venda e viram o *valor líquido* do carro, somado no dashboard.
+
 Para ativar com dados reais:
 
 1. No **SQL Editor** do Supabase, execute [`supabase/schema-crm.sql`](supabase/schema-crm.sql) (cria `veiculos` com o estoque atual, `followups` e os campos de negociação em `propostas`).
-2. Em **Authentication → Users → Add user**, crie o e-mail/senha de cada pessoa da equipe (marque "Auto Confirm User").
-3. Acesse `/crm/` e faça login.
+2. Execute também [`supabase/schema-crm-v3.sql`](supabase/schema-crm-v3.sql) — ficha técnica e gastos do veículo, mais a política que libera a **vitrine pública** (o site enxerga só carros disponíveis e só as colunas da vitrine; gastos e observações internas continuam invisíveis).
+3. Em **Authentication → Users → Add user**, crie o e-mail/senha de cada pessoa da equipe (marque "Auto Confirm User").
+4. Acesse `/crm/` e faça login.
+
+Enquanto a fase 3 não roda, o formulário simplesmente não mostra o seletor de veículos — nada quebra.
 
 Sem login é possível clicar em **"Ver demonstração"** para conhecer o CRM com dados fictícios. A segurança segue o mesmo princípio da ficha: o papel `authenticated` (equipe logada) gerencia tudo; o `anon` (site público) continua apenas inserindo fichas e não enxerga estoque nem follow-ups.
 
