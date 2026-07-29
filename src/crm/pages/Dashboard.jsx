@@ -1,4 +1,16 @@
-import { AlertTriangle, ArrowRight, BadgeCheck, CircleDollarSign, FileText, Handshake, TrendingUp, Wallet } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import {
+  AlertTriangle,
+  ArrowRight,
+  BadgeCheck,
+  CircleDollarSign,
+  Eye,
+  EyeOff,
+  FileText,
+  Handshake,
+  TrendingUp,
+  Wallet,
+} from 'lucide-react';
 
 import { Button } from '@/components/ui/button.jsx';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card.jsx';
@@ -17,6 +29,9 @@ const STATUS_ESTOQUE = [
   ['reservado', 'Reservado'],
   ['vendido', 'Vendido'],
 ];
+
+// Placeholder dos valores escondidos — mesma largura visual em qualquer número.
+const OCULTO = 'R$ ••••••';
 
 const TONS = {
   brand: 'from-brand/18 to-brand/5 text-brand-strong dark:text-brand ring-brand/20',
@@ -42,6 +57,18 @@ function Kpi({ icon: Icon, label, valor, detalhe, tom = 'brand' }) {
 }
 
 export default function Dashboard({ fichas, veiculos = [], carregando, onAbrirFicha, onIrPara }) {
+  // Esconde os valores em reais do painel — útil quando a tela está à vista de
+  // clientes na loja. A escolha fica salva no navegador de quem usa.
+  const [valoresOcultos, setValoresOcultos] = useState(
+    () => localStorage.getItem('crm-valores-ocultos') === 'true',
+  );
+
+  useEffect(() => {
+    localStorage.setItem('crm-valores-ocultos', String(valoresOcultos));
+  }, [valoresOcultos]);
+
+  const moeda = (centavos) => (valoresOcultos ? OCULTO : fmtBRL(centavos));
+
   const total = fichas.length;
   const novas = fichas.filter((f) => f.status === 'novo').length;
   const aprovadas = fichas.filter((f) => f.status === 'aprovado');
@@ -106,7 +133,18 @@ export default function Dashboard({ fichas, veiculos = [], carregando, onAbrirFi
       <PageHeading
         titulo="Visão geral"
         descricao={carregando ? 'Carregando dados...' : 'Resumo das fichas e vendas da loja.'}
-      />
+      >
+        <Button
+          variant="secondary"
+          size="sm"
+          onClick={() => setValoresOcultos((atual) => !atual)}
+          aria-pressed={valoresOcultos}
+          title={valoresOcultos ? 'Mostrar os valores em reais' : 'Esconder os valores em reais'}
+        >
+          {valoresOcultos ? <EyeOff /> : <Eye />}
+          {valoresOcultos ? 'Valores ocultos' : 'Ocultar valores'}
+        </Button>
+      </PageHeading>
 
       {carregando ? (
         <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
@@ -121,12 +159,12 @@ export default function Dashboard({ fichas, veiculos = [], carregando, onAbrirFi
             icon={BadgeCheck}
             label="Fichas aprovadas"
             valor={aprovadas.length}
-            detalhe={valorAprovado ? `${fmtBRL(valorAprovado)} em negociação` : 'Sem valores lançados'}
+            detalhe={valorAprovado ? `${moeda(valorAprovado)} em negociação` : 'Sem valores lançados'}
             tom="teal"
           />
           <Kpi icon={Handshake} label="Vendas concluídas" valor={vendas.length} detalhe={`Conversão de ${conversao}%`} tom="green" />
-          <Kpi icon={CircleDollarSign} label="Total vendido" valor={fmtBRL(valorVendido)} detalhe="Somatório das fichas concluídas" tom="green" />
-          <Kpi icon={Wallet} label="Ticket médio" valor={fmtBRL(ticketMedio)} detalhe="Por venda concluída" />
+          <Kpi icon={CircleDollarSign} label="Total vendido" valor={moeda(valorVendido)} detalhe="Somatório das fichas concluídas" tom="green" />
+          <Kpi icon={Wallet} label="Ticket médio" valor={moeda(ticketMedio)} detalhe="Por venda concluída" />
           <Kpi
             icon={TrendingUp}
             label="Em andamento"
@@ -160,12 +198,12 @@ export default function Dashboard({ fichas, veiculos = [], carregando, onAbrirFi
             <span className="text-[0.78rem] text-muted-foreground">{veiculos.length} veículos</span>
           </CardHeader>
           <CardContent className="flex flex-col gap-5">
-            <Destaque valor={fmtBRL(valorEstoqueDisponivel)} rotulo="em carros disponíveis para venda" />
+            <Destaque valor={moeda(valorEstoqueDisponivel)} rotulo="em carros disponíveis para venda" />
             <BarrasHorizontais
               titulo="Valor do estoque por situação"
               dados={estoquePorSituacao}
               cor="var(--success)"
-              formatar={fmtBRL}
+              formatar={moeda}
               vazio="Nenhum veículo cadastrado no estoque."
             />
           </CardContent>
@@ -179,12 +217,12 @@ export default function Dashboard({ fichas, veiculos = [], carregando, onAbrirFi
             </Button>
           </CardHeader>
           <CardContent className="flex flex-col gap-5">
-            <Destaque valor={fmtBRL(gastoTotal)} rotulo="investidos nos veículos do estoque" />
+            <Destaque valor={moeda(gastoTotal)} rotulo="investidos nos veículos do estoque" />
             <BarrasHorizontais
               titulo="Gastos com manutenção por tipo"
               dados={gastosPorTipo}
               cor="var(--warning)"
-              formatar={fmtBRL}
+              formatar={moeda}
               vazio="Nenhum gasto lançado nos veículos."
             />
           </CardContent>
