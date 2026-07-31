@@ -13,6 +13,21 @@ Formulário e CRM compartilham a mesma base visual: **Tailwind CSS v4** + compon
 
 - Tokens de cor, raio, sombra e tipografia ficam em [`src/index.css`](src/index.css); trocar a marca ali reflete nas duas telas.
 - Tema escuro do CRM usa o atributo `data-theme="dark"` no `<html>` (variante `dark:` do Tailwind mapeada para ele).
+- **Tipografia:** o formulário usa Sora (títulos) + Plus Jakarta Sans (corpo) — mais próximo do cliente final. O CRM usa IBM Plex Sans + Inter e cantos menos arredondados, sob o seletor `[data-app='crm']`, para leitura corporativa.
+
+### Adaptar para outra loja
+
+O projeto foi mantido enxuto o bastante para ser republicado com outra identidade visual. A marca vive em poucos lugares — mudar estes cinco pontos entrega um site novo:
+
+| O quê | Onde |
+|---|---|
+| Cores, raio de canto e fontes | blocos `:root` e `[data-app='crm']` em [`src/index.css`](src/index.css) |
+| Logo, foto de fundo e favicons | arquivos em `public/` (mesmos nomes, para não mexer no código) |
+| Link das fontes, título da aba e meta tags | [`index.html`](index.html) e [`crm/index.html`](crm/index.html) |
+| Nome da loja no aceite LGPD | `CONSENT_TEXT` em [`src/utils/form.js`](src/utils/form.js) |
+| Textos do topo (chamada, descrição, selos) e rodapé | seção `hero` em [`src/App.jsx`](src/App.jsx) |
+
+Os campos do formulário em si não precisam de código: o admin de cada loja liga, desliga, renomeia e reordena tudo pela aba **Administração** do CRM.
 - Fundo fotográfico do formulário e do login: `public/hero-showroom.jpg` — foto de showroom do [Unsplash](https://unsplash.com/) (licença livre, uso comercial permitido). Para usar uma foto da própria loja, basta substituir o arquivo mantendo o nome.
 
 ## Recursos incluídos
@@ -98,8 +113,16 @@ Para ativar com dados reais:
 1. No **SQL Editor** do Supabase, execute [`supabase/schema-crm.sql`](supabase/schema-crm.sql) (cria `veiculos` com o estoque atual, `followups` e os campos de negociação em `propostas`).
 2. Execute também [`supabase/schema-crm-v3.sql`](supabase/schema-crm-v3.sql) — ficha técnica e gastos do veículo, mais a política que libera a **vitrine pública** (o site enxerga só carros disponíveis e só as colunas da vitrine; gastos e observações internas continuam invisíveis).
 3. Execute [`supabase/schema-crm-v4.sql`](supabase/schema-crm-v4.sql) — fotos dos veículos e o bucket `veiculos` no Storage. Esse bucket é **público** por ser material de vitrine; não envie documento de cliente para ele (documentos vão no bucket privado `anexos`, pela ficha).
-4. Em **Authentication → Users → Add user**, crie o e-mail/senha de cada pessoa da equipe (marque "Auto Confirm User").
-5. Acesse `/crm/` e faça login.
+4. Execute [`supabase/schema-crm-v5.sql`](supabase/schema-crm-v5.sql) — perfis de acesso e configuração do formulário. **Troque o e-mail do primeiro admin no final do arquivo** antes de rodar.
+5. Em **Authentication → Users → Add user**, crie o e-mail/senha de cada pessoa da equipe (marque "Auto Confirm User").
+6. Acesse `/crm/` e faça login.
+
+### Papéis de acesso
+
+- **Equipe** — fichas, esteira, estoque e dashboard.
+- **Admin** — tudo isso mais a aba **Administração**, onde dá para esconder campos do formulário público, mudar o rótulo que o cliente lê, definir o que é obrigatório, reordenar as seções e gerenciar quem é admin.
+
+CPF, celular e a autorização LGPD são fixos e não podem ser escondidos nem virar opcionais — sem eles não há análise de crédito nem base legal para tratar os dados. A restrição é aplicada no banco pela política `admin_edita_config`, não só na interface.
 
 Enquanto a fase 3 não roda, o formulário simplesmente não mostra o seletor de veículos — nada quebra.
 

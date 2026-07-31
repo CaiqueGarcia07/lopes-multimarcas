@@ -75,6 +75,47 @@ export function createSupabaseApi(client, userEmail) {
       return client.storage.from('veiculos').getPublicUrl(path).data.publicUrl;
     },
 
+    // Papel do usuário logado: 'admin' libera a aba de administração.
+    async meuPapel() {
+      const { data, error } = await client
+        .from('perfis')
+        .select('papel')
+        .eq('email', userEmail)
+        .maybeSingle();
+      if (error) return 'equipe';
+      return data?.papel || 'equipe';
+    },
+
+    async listPerfis() {
+      return unwrap(await client.from('perfis').select('*').order('email'));
+    },
+
+    async salvarPerfil(email, papel) {
+      return unwrap(
+        await client.from('perfis').upsert({ email: email.trim().toLowerCase(), papel }).select().single(),
+      );
+    },
+
+    async removerPerfil(email) {
+      unwrap(await client.from('perfis').delete().eq('email', email).select('email'));
+    },
+
+    async lerConfigFormulario() {
+      const { data, error } = await client.from('form_config').select('dados').eq('id', 1).maybeSingle();
+      if (error) return null;
+      return data?.dados || null;
+    },
+
+    async salvarConfigFormulario(dados) {
+      unwrap(
+        await client
+          .from('form_config')
+          .update({ dados, atualizado_em: new Date().toISOString(), atualizado_por: userEmail })
+          .eq('id', 1)
+          .select('id'),
+      );
+    },
+
     async listFollowups(propostaId) {
       return unwrap(
         await client
@@ -140,6 +181,11 @@ export function createDemoApi() {
   let followups = demoFollowups.map((f) => ({ ...f }));
   let anexosDemo = [];
   const fotosDemo = new Map();
+  let perfisDemo = [
+    { email: 'gerencia@lopesmultimarcas.com.br', papel: 'admin' },
+    { email: 'vendas@lopesmultimarcas.com.br', papel: 'equipe' },
+  ];
+  let configDemo = null;
   let seq = 100;
 
   const comVeiculo = (ficha) => ({
@@ -220,6 +266,40 @@ export function createDemoApi() {
 
     fotoUrl(path) {
       return fotosDemo.get(path) || '';
+    },
+
+    // No modo demonstração todo mundo é admin, para conhecer a tela.
+    async meuPapel() {
+      return 'admin';
+    },
+
+    async listPerfis() {
+      await latency();
+      return perfisDemo;
+    },
+
+    async salvarPerfil(email, papel) {
+      await latency();
+      const normalizado = email.trim().toLowerCase();
+      perfisDemo = [...perfisDemo.filter((p) => p.email !== normalizado), { email: normalizado, papel }].sort((a, b) =>
+        a.email.localeCompare(b.email),
+      );
+      return { email: normalizado, papel };
+    },
+
+    async removerPerfil(email) {
+      await latency();
+      perfisDemo = perfisDemo.filter((p) => p.email !== email);
+    },
+
+    async lerConfigFormulario() {
+      await latency();
+      return configDemo;
+    },
+
+    async salvarConfigFormulario(dados) {
+      await latency();
+      configDemo = dados;
     },
 
     async listFollowups(propostaId) {

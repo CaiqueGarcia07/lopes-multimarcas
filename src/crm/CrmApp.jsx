@@ -8,6 +8,7 @@ import {
   Menu,
   Moon,
   Search,
+  ShieldCheck,
   Sun,
   X,
 } from 'lucide-react';
@@ -18,6 +19,7 @@ import { Input } from '@/components/ui/input.jsx';
 import { cn } from '@/lib/utils.js';
 
 import { createDemoApi, createSupabaseApi, supabase, supabaseConfigurado } from './lib/api.js';
+import Admin from './pages/Admin.jsx';
 import Dashboard from './pages/Dashboard.jsx';
 import Esteira from './pages/Esteira.jsx';
 import Estoque from './pages/Estoque.jsx';
@@ -32,6 +34,8 @@ const PAGES = [
   { id: 'estoque', label: 'Estoque', icon: CarFront },
 ];
 
+const PAGINA_ADMIN = { id: 'admin', label: 'Administração', icon: ShieldCheck };
+
 export default function CrmApp() {
   const [theme, setTheme] = useState(() => localStorage.getItem('crm-theme') || 'dark');
   const [session, setSession] = useState(null);
@@ -44,6 +48,7 @@ export default function CrmApp() {
   const [erro, setErro] = useState('');
   const [detalheId, setDetalheId] = useState(null);
   const [menuAberto, setMenuAberto] = useState(false);
+  const [papel, setPapel] = useState('equipe');
 
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
@@ -88,6 +93,11 @@ export default function CrmApp() {
     recarregar();
   }, [recarregar]);
 
+  useEffect(() => {
+    if (!api) return;
+    api.meuPapel().then(setPapel).catch(() => setPapel('equipe'));
+  }, [api]);
+
   const atualizarFicha = useCallback(
     async (id, patch) => {
       const atualizada = await api.updateFicha(id, patch);
@@ -120,6 +130,10 @@ export default function CrmApp() {
 
   const detalhe = detalheId ? fichas.find((f) => f.id === detalheId) : null;
   const alternarTema = () => setTheme(theme === 'dark' ? 'light' : 'dark');
+  const ehAdmin = papel === 'admin';
+  const paginas = ehAdmin ? [...PAGES, PAGINA_ADMIN] : PAGES;
+  // Se o papel mudar enquanto a aba admin está aberta, volta para o dashboard.
+  const paginaAtual = page === 'admin' && !ehAdmin ? 'dashboard' : page;
 
   if (!api) {
     return (
@@ -169,15 +183,15 @@ export default function CrmApp() {
           <span className="px-3 pb-2 text-[0.68rem] font-bold tracking-[0.16em] text-sidebar-foreground/40 uppercase">
             Operação
           </span>
-          {PAGES.map(({ id, label, icon: Icon }) => (
+          {paginas.map(({ id, label, icon: Icon }) => (
             <button
               key={id}
               type="button"
               onClick={() => irPara(id)}
               className={cn(
-                'relative flex items-center gap-3 rounded-lg px-3 py-2.5 text-[0.92rem] font-semibold transition-colors outline-none',
+                'relative flex items-center gap-3 rounded-md px-3 py-2.5 text-[0.92rem] font-semibold transition-colors outline-none',
                 'hover:bg-sidebar-accent focus-visible:ring-[3px] focus-visible:ring-brand/40',
-                page === id
+                paginaAtual === id
                   ? 'bg-sidebar-accent text-white before:absolute before:top-1/2 before:left-0 before:h-5 before:w-[3px] before:-translate-y-1/2 before:rounded-r-full before:bg-brand'
                   : 'text-sidebar-foreground/70',
               )}
@@ -260,7 +274,7 @@ export default function CrmApp() {
         </div>
 
         <main className="flex-1 px-4 py-6 sm:px-6">
-          {page === 'dashboard' && (
+          {paginaAtual === 'dashboard' && (
             <Dashboard
               fichas={fichas}
               veiculos={veiculos}
@@ -269,7 +283,7 @@ export default function CrmApp() {
               onIrPara={setPage}
             />
           )}
-          {page === 'fichas' && (
+          {paginaAtual === 'fichas' && (
             <Fichas
               fichas={fichas}
               veiculos={veiculos}
@@ -278,7 +292,7 @@ export default function CrmApp() {
               onAbrirFicha={setDetalheId}
             />
           )}
-          {page === 'esteira' && (
+          {paginaAtual === 'esteira' && (
             <Esteira
               fichas={fichas}
               api={api}
@@ -287,9 +301,10 @@ export default function CrmApp() {
               onAbrirFicha={setDetalheId}
             />
           )}
-          {page === 'estoque' && (
+          {paginaAtual === 'estoque' && (
             <Estoque veiculos={veiculos} fichas={fichas} api={api} onRecarregar={recarregar} />
           )}
+          {paginaAtual === 'admin' && <Admin api={api} />}
         </main>
       </div>
 

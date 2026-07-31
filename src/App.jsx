@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { createContext, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import {
   BadgeCheck,
   Check,
@@ -49,7 +49,9 @@ import {
 } from '@/components/ui/select.jsx';
 import { Separator } from '@/components/ui/separator.jsx';
 
+import { configPadrao, indexarCampos } from './config/formulario.js';
 import { buscarEnderecoPorCep } from './services/cepApi.js';
+import { carregarConfigFormulario } from './services/configApi.js';
 import { anoDoVeiculo, listarVitrine } from './services/estoqueApi.js';
 import { submitProposal } from './services/proposalApi.js';
 import {
@@ -130,28 +132,10 @@ const initialForm = {
   website: '',
 };
 
-// Endereço do lead é obrigatório por inteiro — só o complemento é opcional.
-const CAMPOS_ENDERECO = [
-  ['cepResidencial', 'Informe o CEP.'],
-  ['ruaResidencial', 'Informe a rua.'],
-  ['numeroResidencial', 'Informe o número.'],
-  ['bairroResidencial', 'Informe o bairro.'],
-  ['cidadeResidencial', 'Informe a cidade.'],
-  ['ufResidencial', 'Informe a UF.'],
-];
-
-const enderecoCompleto = (form) => CAMPOS_ENDERECO.every(([campo]) => String(form[campo] || '').trim());
-
-// Itens do checklist lateral: cada um vale uma fatia do progresso.
-const OBRIGATORIOS = [
-  ['Nome completo', (f) => Boolean(f.nome.trim())],
-  ['CPF', (f) => Boolean(f.cpf)],
-  ['Data de nascimento', (f) => Boolean(f.dataNascimento)],
-  ['Possui CNH?', (f) => Boolean(f.temCnh)],
-  ['Telefone celular', (f) => Boolean(f.celular)],
-  ['Endereço completo', enderecoCompleto],
-  ['Autorização de uso dos dados', (f) => Boolean(f.consentimento)],
-];
+const preenchido = (form, id) => {
+  const valor = form[id];
+  return typeof valor === 'string' ? Boolean(valor.trim()) : Boolean(valor);
+};
 
 const CAMPOS_TELEFONE = [
   'telefoneFixoResidencial',
@@ -179,12 +163,21 @@ const CAMPOS_POR_CEP = {
   },
 };
 
+/* Regras de exibição definidas pelo admin no CRM (seção Administração). */
+const ConfigForm = createContext({ campos: {}, secoes: {} });
+
 function Field({ label, name, required, error, hint, className = '', children }) {
+  const regra = useContext(ConfigForm).campos[name];
+  if (regra && !regra.visivel) return null;
+
+  const rotulo = regra?.rotulo || label;
+  const obrigatorio = regra ? regra.obrigatorio : required;
+
   return (
     <div className={`flex flex-col gap-2 ${className}`}>
       <Label htmlFor={name}>
-        {label}
-        {required && <span className="text-destructive">*</span>}
+        {rotulo}
+        {obrigatorio && <span className="text-destructive">*</span>}
       </Label>
       {children}
       {hint && !error && (
@@ -247,14 +240,18 @@ function SectionBadge({ pending = 0, complete = false, optional = false }) {
 }
 
 function FormSection({ value, icon: Icon, title, subtitle, badge, children }) {
+  const secao = useContext(ConfigForm).secoes[value];
+  if (secao && !secao.visivel) return null;
+
   return (
-    <AccordionItem value={value}>
+    // A ordem vem da configuração; o contêiner é flex, então `order` basta.
+    <AccordionItem value={value} style={{ order: secao?.ordem ?? 0 }}>
       <AccordionTrigger>
         <span className="grid size-11 shrink-0 place-items-center rounded-xl bg-gradient-to-br from-brand/18 to-brand/5 text-brand-strong ring-1 ring-brand/20">
           <Icon className="size-5.5" aria-hidden="true" />
         </span>
         <span className="flex min-w-0 flex-1 flex-col gap-0.5">
-          <strong className="font-display text-[1.02rem] tracking-tight">{title}</strong>
+          <strong className="font-display text-[1.02rem] tracking-tight">{secao?.titulo || title}</strong>
           <small className="truncate text-[0.82rem] font-medium text-muted-foreground">{subtitle}</small>
         </span>
         {badge}
@@ -274,41 +271,77 @@ export default function App() {
   const [protocolCopied, setProtocolCopied] = useState(false);
   const [cepBuscando, setCepBuscando] = useState({});
   const [vitrine, setVitrine] = useState([]);
+  const [config, setConfig] = useState(() => configPadrao());
   const confirmButtonRef = useRef(null);
 
   useEffect(() => {
     listarVitrine().then(setVitrine);
+    carregarConfigFormulario().then(setConfig);
   }, []);
+
+  const campos = useMemo(() => indexarCampos(config), [config]);
+  const secoesVisiveis = useMemo(() => config.secoes.filter((s) => s.visivel), [config]);
+  const mostraSecao = (id) => secoesVisiveis.some((s) => s.id === id);
+
+  const contextoConfig = useMemo(
+    () => ({
+      campos,
+      secoes: Object.fromEntries(
+        config.secoes.map((s, indice) => [s.id, { visivel: s.visivel, titulo: s.titulo, ordem: indice }]),
+      ),
+    }),
+    [campos, config],
+  );
+
+  // Obrigatórios de verdade: campo marcado como obrigatório e visível.
+  const obrigatorios = useMemo(
+    () => Object.values(campos).filter((c) => c.visivel && c.obrigatorio),
+    [campos],
+  );
 
   const veiculoEscolhido = vitrine.find((v) => v.id === form.veiculoId) || null;
 
-  const requiredChecklist = useMemo(
-    () => OBRIGATORIOS.map(([label, pronto]) => [label, pronto(form)]),
-    [form],
-  );
+  // O checklist acompanha a configuração: some quando o admin esconde a seção.
+  const requiredChecklist = useMemo(() => {
+    const grupos = secoesVisiveis
+      .map((secao) => {
+        const exigidos = secao.campos.filter((c) => c.visivel && c.obrigatorio);
+        if (!exigidos.length) return null;
+        return [secao.titulo, exigidos.every((c) => preenchido(form, c.id))];
+      })
+      .filter(Boolean);
+    return [...grupos, ['Autorização de uso dos dados', Boolean(form.consentimento)]];
+  }, [secoesVisiveis, form]);
 
   const progress = useMemo(() => {
     const completed = requiredChecklist.filter(([, done]) => done).length;
     return Math.round((completed / requiredChecklist.length) * 100);
   }, [requiredChecklist]);
 
+  const pendentesDaSecao = (id) =>
+    (secoesVisiveis.find((s) => s.id === id)?.campos || []).filter(
+      (c) => c.visivel && c.obrigatorio && !preenchido(form, c.id),
+    ).length;
+
   const anyFilled = (fields) => fields.some((field) => Boolean(form[field]));
   const sectionStatus = {
-    pessoais: {
-      pending: ['nome', 'cpf', 'dataNascimento', 'temCnh'].filter((field) => !String(form[field]).trim()).length,
-      complete: true,
-    },
-    residenciais: {
-      pending:
-        CAMPOS_ENDERECO.filter(([campo]) => !String(form[campo] || '').trim()).length + (form.celular ? 0 : 1),
-      complete: true,
-    },
+    pessoais: { pending: pendentesDaSecao('pessoais'), complete: true },
+    residenciais: { pending: pendentesDaSecao('residenciais'), complete: true },
     profissionais: {
+      pending: pendentesDaSecao('profissionais'),
       complete: anyFilled(['nomeEmpresa', 'cargo', 'rendaMensal']),
       optional: true,
     },
-    bancarios: { complete: anyFilled(['banco', 'agencia', 'conta']), optional: true },
-    referencias: { complete: anyFilled(['referencia1Nome', 'referencia2Nome']), optional: true },
+    bancarios: {
+      pending: pendentesDaSecao('bancarios'),
+      complete: anyFilled(['banco', 'agencia', 'conta']),
+      optional: true,
+    },
+    referencias: {
+      pending: pendentesDaSecao('referencias'),
+      complete: anyFilled(['referencia1Nome', 'referencia2Nome']),
+      optional: true,
+    },
   };
 
   const isDirty = useMemo(
@@ -380,47 +413,52 @@ export default function App() {
 
   const validate = () => {
     const nextErrors = {};
+    const visivel = (id) => campos[id]?.visivel !== false;
 
-    if (!form.nome.trim()) nextErrors.nome = 'Informe o nome completo.';
-
-    CAMPOS_ENDERECO.forEach(([campo, mensagem]) => {
-      if (!String(form[campo] || '').trim()) nextErrors[campo] = mensagem;
+    // 1) Obrigatoriedade, conforme a configuração publicada pelo admin.
+    obrigatorios.forEach((campo) => {
+      if (campo.id === 'temCnh') {
+        if (!form.temCnh) nextErrors.temCnh = 'Selecione uma opção.';
+        return;
+      }
+      // Mensagem neutra: o rótulo já está logo acima e evita erro de concordância.
+      if (!preenchido(form, campo.id)) nextErrors[campo.id] = 'Campo obrigatório.';
     });
 
-    if (!form.cpf) nextErrors.cpf = 'Informe o CPF.';
-    else if (!validateCPF(form.cpf)) nextErrors.cpf = 'CPF inválido.';
+    // 2) Formato — vale para qualquer campo visível que tenha sido preenchido.
+    if (visivel('cpf') && form.cpf && !validateCPF(form.cpf)) nextErrors.cpf = 'CPF inválido.';
 
-    if (!form.dataNascimento) {
-      nextErrors.dataNascimento = 'Informe a data de nascimento.';
-    } else {
+    if (visivel('dataNascimento') && form.dataNascimento) {
       const birthDate = new Date(`${form.dataNascimento}T00:00:00`);
       if (Number.isNaN(birthDate.getTime())) nextErrors.dataNascimento = 'Data inválida.';
       else if (form.dataNascimento > maxBirthDate) nextErrors.dataNascimento = 'A data não pode estar no futuro.';
     }
 
-    if (!form.temCnh) nextErrors.temCnh = 'Selecione uma opção.';
-
-    if (!form.celular) nextErrors.celular = 'Informe o telefone celular.';
-    else if (onlyDigits(form.celular).length < 10) nextErrors.celular = 'Telefone incompleto.';
-
-    if (form.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email)) {
+    if (visivel('email') && form.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email)) {
       nextErrors.email = 'E-mail inválido.';
     }
 
-    if (form.cnpjEmpresa && !validateCNPJ(form.cnpjEmpresa)) {
+    if (visivel('cnpjEmpresa') && form.cnpjEmpresa && !validateCNPJ(form.cnpjEmpresa)) {
       nextErrors.cnpjEmpresa = 'CNPJ inválido.';
     }
 
     Object.keys(CAMPOS_POR_CEP).forEach((field) => {
-      if (form[field] && onlyDigits(form[field]).length !== 8) nextErrors[field] = 'CEP incompleto.';
+      if (visivel(field) && form[field] && onlyDigits(form[field]).length !== 8) {
+        nextErrors[field] = 'CEP incompleto.';
+      }
     });
 
-    if (form.ufResidencial && form.ufResidencial.length !== 2) nextErrors.ufResidencial = 'UF deve ter 2 letras.';
-
-    CAMPOS_TELEFONE.filter((field) => field !== 'celular').forEach((field) => {
-      if (form[field] && onlyDigits(form[field]).length < 10) nextErrors[field] = 'Telefone incompleto.';
+    ['ufResidencial', 'ufEmpresa', 'ufNascimento'].forEach((field) => {
+      if (visivel(field) && form[field] && form[field].length !== 2) nextErrors[field] = 'UF deve ter 2 letras.';
     });
 
+    CAMPOS_TELEFONE.forEach((field) => {
+      if (visivel(field) && form[field] && onlyDigits(form[field]).length < 10) {
+        nextErrors[field] = 'Telefone incompleto.';
+      }
+    });
+
+    // 3) Consentimento nunca é configurável: é a base legal do tratamento.
     if (!form.consentimento) nextErrors.consentimento = 'É necessário autorizar o uso dos dados.';
 
     setErrors(nextErrors);
@@ -666,6 +704,7 @@ export default function App() {
               </CardContent>
             </Card>
           ) : (
+            <ConfigForm.Provider value={contextoConfig}>
             <form onSubmit={handleSubmit} noValidate className="flex flex-col gap-4">
               <Card className="overflow-hidden">
                 <div className="flex flex-wrap items-center justify-between gap-4 border-b border-border bg-gradient-to-br from-accent/70 to-transparent px-6 py-6">
@@ -703,7 +742,7 @@ export default function App() {
                 />
               </div>
 
-              {vitrine.length > 0 && (
+              {vitrine.length > 0 && mostraSecao('veiculo') && (
                 <Card>
                   <CardContent className="flex flex-col gap-4">
                     <div className="flex items-center gap-3">
@@ -1338,6 +1377,7 @@ export default function App() {
                 </Button>
               </div>
             </form>
+            </ConfigForm.Provider>
           )}
         </div>
       </main>
