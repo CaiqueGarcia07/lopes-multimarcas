@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
+  BriefcaseBusiness,
   CarFront,
   Check,
   Clock,
@@ -7,24 +8,28 @@ import {
   ExternalLink,
   FileText,
   Image as ImageIcon,
+  Landmark,
   LoaderCircle,
   Lock,
+  MapPinHouse,
   MessageSquarePlus,
   Paperclip,
   Phone,
   ShieldCheck,
   Trash2,
+  UserRound,
+  UsersRound,
 } from 'lucide-react';
 
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion.jsx';
 import { Alert, AlertDescription } from '@/components/ui/alert.jsx';
 import { Badge } from '@/components/ui/badge.jsx';
 import { Button } from '@/components/ui/button.jsx';
 import { Card, CardContent } from '@/components/ui/card.jsx';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog.jsx';
 import { Input } from '@/components/ui/input.jsx';
 import { Label } from '@/components/ui/label.jsx';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select.jsx';
-import { Sheet, SheetBody, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet.jsx';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs.jsx';
 import { Textarea } from '@/components/ui/textarea.jsx';
 import { cn } from '@/lib/utils.js';
 
@@ -61,6 +66,16 @@ const BANCOS = [
 // O Radix Select reserva a string vazia para "sem valor".
 const NENHUM = '__nenhum__';
 
+const endereco = (bloco = {}) =>
+  [
+    [bloco.logradouro, bloco.numero].filter(Boolean).join(', '),
+    bloco.complemento,
+    bloco.bairro,
+    [bloco.cidade, bloco.uf].filter(Boolean).join('/'),
+  ]
+    .filter(Boolean)
+    .join(' — ') || null;
+
 function BotaoCopiar({ valor, rotulo }) {
   const [copiado, setCopiado] = useState(false);
 
@@ -81,9 +96,9 @@ function BotaoCopiar({ valor, rotulo }) {
       title={copiado ? 'Copiado!' : `Copiar ${rotulo}`}
       aria-label={copiado ? 'Copiado' : `Copiar ${rotulo}`}
       className={cn(
-        'grid size-6 shrink-0 place-items-center rounded-md text-muted-foreground opacity-0 transition-all',
-        'group-hover/info:opacity-100 focus-visible:opacity-100 hover:bg-secondary hover:text-foreground',
-        copiado && 'opacity-100 text-emerald-500',
+        'grid size-6 shrink-0 place-items-center rounded-md text-muted-foreground transition-colors',
+        'hover:bg-secondary hover:text-foreground focus-visible:opacity-100',
+        copiado ? 'text-emerald-500' : 'opacity-0 group-hover/info:opacity-100 max-sm:opacity-100',
       )}
     >
       {copiado ? <Check className="size-3.5" /> : <Copy className="size-3.5" />}
@@ -91,38 +106,70 @@ function BotaoCopiar({ valor, rotulo }) {
   );
 }
 
-function Info({ rotulo, copia, children }) {
+/** Par rótulo/valor. Trunca sozinho: nada aqui pode alargar o diálogo. */
+function Info({ rotulo, valor, copia, children }) {
+  const conteudo = children ?? valor;
+  const vazio = conteudo == null || conteudo === '';
   return (
-    <div className="group/info flex flex-col gap-1 rounded-lg border border-border px-3.5 py-2.5">
-      <span className="text-[0.7rem] font-bold tracking-wide text-muted-foreground uppercase">{rotulo}</span>
-      <span className="flex min-h-6 items-center gap-1.5 text-[0.9rem] font-medium">
-        <span className="min-w-0 flex-1 truncate">{children ?? '—'}</span>
-        {copia != null && copia !== '' && <BotaoCopiar valor={copia} rotulo={rotulo.toLowerCase()} />}
+    <div className="group/info flex min-w-0 flex-col gap-1 rounded-md border border-border px-3 py-2">
+      <span className="truncate text-[0.68rem] font-semibold tracking-wide text-muted-foreground uppercase">
+        {rotulo}
+      </span>
+      <span className="flex min-h-6 min-w-0 items-center gap-1.5 text-[0.88rem] font-medium">
+        <span className={cn('min-w-0 flex-1 truncate', vazio && 'text-muted-foreground/60')} title={typeof conteudo === 'string' ? conteudo : undefined}>
+          {vazio ? '—' : conteudo}
+        </span>
+        {!vazio && copia != null && copia !== '' && <BotaoCopiar valor={copia} rotulo={rotulo.toLowerCase()} />}
       </span>
     </div>
   );
 }
 
-function Secao({ icone: Icone, titulo, children }) {
+function Secao({ icone: Icone, titulo, acao, children }) {
   return (
-    <Card>
-      <CardContent className="flex flex-col gap-4 py-5">
-        <h3 className="flex items-center gap-2 text-[0.95rem] font-bold tracking-tight">
-          {Icone && <Icone className="size-4 text-brand-strong dark:text-brand" />}
-          {titulo}
-        </h3>
+    <Card className="min-w-0">
+      <CardContent className="flex min-w-0 flex-col gap-4 px-4 py-4 sm:px-5">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <h3 className="flex items-center gap-2 text-[0.92rem] font-semibold tracking-tight">
+            {Icone && <Icone className="size-4 shrink-0 text-brand-strong dark:text-brand" />}
+            {titulo}
+          </h3>
+          {acao}
+        </div>
         {children}
       </CardContent>
     </Card>
   );
 }
 
+/** Categoria de dados do formulário, aberta ou fechada pelo usuário. */
+function Categoria({ valor, icone: Icone, titulo, resumo, children }) {
+  return (
+    <AccordionItem value={valor} className="min-w-0 rounded-md">
+      <AccordionTrigger className="gap-3 px-4 py-3">
+        <Icone className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+        <span className="flex min-w-0 flex-1 flex-col gap-0.5 text-left">
+          <strong className="truncate text-[0.88rem] font-semibold tracking-tight">{titulo}</strong>
+          {resumo && <small className="truncate text-[0.76rem] font-normal text-muted-foreground">{resumo}</small>}
+        </span>
+      </AccordionTrigger>
+      <AccordionContent className="px-4 py-4">{children}</AccordionContent>
+    </AccordionItem>
+  );
+}
+
+const GradeInfo = ({ children }) => (
+  <div className="grid min-w-0 gap-2.5 sm:grid-cols-2">{children}</div>
+);
+
 export default function FichaDetail({ ficha, veiculos, api, onAtualizar, onFechar }) {
   const dados = ficha.dados || {};
   const cliente = dados.cliente || {};
   const residencia = dados.residencia || {};
   const trabalho = dados.trabalho || {};
+  const bancarios = dados.dadosBancarios || {};
   const referencias = dados.referencias || [];
+  const veiculoInteresse = dados.veiculoInteresse || null;
   const idade = idadeDe(cliente.dataNascimento);
 
   // Consentimento LGPD: registrado no envio da ficha, nunca editável no CRM.
@@ -137,7 +184,11 @@ export default function FichaDetail({ ficha, veiculos, api, onAtualizar, onFecha
   const [anexos, setAnexos] = useState([]);
   const [enviandoAnexo, setEnviandoAnexo] = useState(false);
   const [erroAnexo, setErroAnexo] = useState('');
+  const [categoriasAbertas, setCategoriasAbertas] = useState(['identificacao']);
   const arquivoRef = useRef(null);
+
+  const TODAS_CATEGORIAS = ['identificacao', 'residencia', 'trabalho', 'bancarios', 'referencias', 'veiculo'];
+  const tudoAberto = categoriasAbertas.length === TODAS_CATEGORIAS.length;
 
   useEffect(() => {
     setNegociacao({
@@ -254,24 +305,42 @@ export default function FichaDetail({ ficha, veiculos, api, onAtualizar, onFecha
   const definir = (chave) => (valor) => setNegociacao((atual) => ({ ...atual, [chave]: valor }));
 
   const whatsapp = ficha.celular ? `https://wa.me/55${ficha.celular}` : null;
-  const bancosListados = negociacao.instituicao_financeira && !BANCOS.includes(negociacao.instituicao_financeira)
-    ? [negociacao.instituicao_financeira, ...BANCOS]
-    : BANCOS;
+  const bancosListados =
+    negociacao.instituicao_financeira && !BANCOS.includes(negociacao.instituicao_financeira)
+      ? [negociacao.instituicao_financeira, ...BANCOS]
+      : BANCOS;
 
   return (
-    <Sheet open onOpenChange={(aberto) => !aberto && onFechar()}>
-      <SheetContent aria-label={`Ficha de ${nomeDa(ficha)}`}>
-        <SheetHeader>
-          <span className="font-mono text-[0.8rem] tracking-wide text-muted-foreground">{ficha.protocolo}</span>
-          <SheetTitle>{nomeDa(ficha)}</SheetTitle>
-          <div className="mt-1 flex flex-wrap items-center gap-2 text-[0.8rem] text-muted-foreground">
+    <Dialog open onOpenChange={(aberto) => !aberto && onFechar()}>
+      <DialogContent
+        showCloseButton={false}
+        className="grid max-h-[92dvh] w-[calc(100%-1.5rem)] max-w-4xl grid-rows-[auto_minmax(0,1fr)] gap-0 overflow-hidden p-0"
+      >
+        <DialogHeader className="min-w-0 gap-1 border-b border-border px-4 py-4 pr-14 sm:px-6">
+          <span className="font-mono text-[0.76rem] tracking-wide text-muted-foreground">{ficha.protocolo}</span>
+          <DialogTitle className="truncate text-lg sm:text-xl">{nomeDa(ficha)}</DialogTitle>
+          <DialogDescription className="sr-only">
+            Ficha cadastral completa, negociação, anexos e histórico de contatos.
+          </DialogDescription>
+          <div className="mt-1 flex flex-wrap items-center gap-2 text-[0.78rem] text-muted-foreground">
             <StatusPill status={ficha.status} />
             <EsperaPill ficha={ficha} icone={Clock} sufixo="sem movimentação" />
             <span>Recebida em {fmtDate(ficha.criado_em)}</span>
           </div>
-        </SheetHeader>
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={onFechar}
+            aria-label="Fechar ficha"
+            className="absolute top-3.5 right-3.5"
+          >
+            <span aria-hidden="true" className="text-lg leading-none">
+              ×
+            </span>
+          </Button>
+        </DialogHeader>
 
-        <SheetBody className="flex flex-col gap-5">
+        <div className="flex min-w-0 flex-col gap-4 overflow-x-hidden overflow-y-auto scrollbar-slim px-4 py-4 sm:px-6 sm:py-5">
           <Secao titulo="Situação da ficha">
             <div className="flex flex-wrap gap-2">
               {STATUS_OPTIONS.map((s) => (
@@ -280,7 +349,7 @@ export default function FichaDetail({ ficha, veiculos, api, onAtualizar, onFecha
                   type="button"
                   onClick={() => mudarStatus(s.value)}
                   className={cn(
-                    'rounded-lg border px-3 py-1.5 text-[0.82rem] font-bold transition-all outline-none',
+                    'rounded-md border px-2.5 py-1.5 text-[0.8rem] font-semibold transition-all outline-none',
                     'focus-visible:ring-[3px] focus-visible:ring-brand/35',
                     ficha.status === s.value
                       ? cn(corDoStatus(s.value).pill, 'ring-2 ring-current/25')
@@ -294,19 +363,19 @@ export default function FichaDetail({ ficha, veiculos, api, onAtualizar, onFecha
           </Secao>
 
           <Secao icone={ShieldCheck} titulo="Autorização de uso dos dados">
-            <div className="flex flex-wrap items-center gap-3 rounded-xl border border-emerald-500/25 bg-emerald-500/8 px-4 py-3.5">
-              <span className="grid size-9 shrink-0 place-items-center rounded-lg bg-emerald-500/15 text-emerald-600 dark:text-emerald-400">
+            <div className="flex min-w-0 flex-wrap items-center gap-3 rounded-md border border-emerald-500/25 bg-emerald-500/8 px-3.5 py-3">
+              <span className="grid size-9 shrink-0 place-items-center rounded-md bg-emerald-500/15 text-emerald-600 dark:text-emerald-400">
                 <Lock className="size-4" />
               </span>
-              <div className="min-w-0 flex-1">
-                <strong className="block text-[0.9rem]">
+              <div className="min-w-[12rem] flex-1">
+                <strong className="block text-[0.88rem]">
                   {autorizado
                     ? 'Cliente autorizou o uso dos dados para simulações'
                     : 'Sem registro de autorização nesta ficha'}
                 </strong>
-                <span className="text-[0.78rem] text-muted-foreground">
+                <span className="text-[0.76rem] text-muted-foreground">
                   {autorizado
-                    ? `Aceite registrado em ${fmtDateTime(ficha.criado_em)}${versaoConsentimento ? ` · texto versão ${versaoConsentimento}` : ''} — análise de crédito e simulação de financiamento junto às instituições parceiras (LGPD, Lei nº 13.709/2018).`
+                    ? `Aceite registrado em ${fmtDateTime(ficha.criado_em)}${versaoConsentimento ? ` · texto versão ${versaoConsentimento}` : ''} — análise de crédito e simulação de financiamento (LGPD, Lei nº 13.709/2018).`
                     : 'Ficha anterior ao registro de consentimento ou importada manualmente.'}
                 </span>
               </div>
@@ -317,8 +386,8 @@ export default function FichaDetail({ ficha, veiculos, api, onAtualizar, onFecha
           </Secao>
 
           <Secao icone={CarFront} titulo="Negociação">
-            <div className="grid gap-4 sm:grid-cols-2">
-              <div className="flex flex-col gap-2 sm:col-span-2">
+            <div className="grid min-w-0 gap-4 sm:grid-cols-2">
+              <div className="flex min-w-0 flex-col gap-2 sm:col-span-2">
                 <Label htmlFor="neg-veiculo">Carro vinculado</Label>
                 <Select
                   value={negociacao.veiculo_id || NENHUM}
@@ -338,7 +407,7 @@ export default function FichaDetail({ ficha, veiculos, api, onAtualizar, onFecha
                 </Select>
               </div>
 
-              <div className="flex flex-col gap-2">
+              <div className="flex min-w-0 flex-col gap-2">
                 <Label htmlFor="neg-venda">Valor de venda</Label>
                 <Input
                   id="neg-venda"
@@ -348,7 +417,7 @@ export default function FichaDetail({ ficha, veiculos, api, onAtualizar, onFecha
                   placeholder="R$ 0,00"
                 />
               </div>
-              <div className="flex flex-col gap-2">
+              <div className="flex min-w-0 flex-col gap-2">
                 <Label htmlFor="neg-entrada">Valor de entrada</Label>
                 <Input
                   id="neg-entrada"
@@ -359,7 +428,7 @@ export default function FichaDetail({ ficha, veiculos, api, onAtualizar, onFecha
                 />
               </div>
 
-              <div className="flex flex-col gap-2">
+              <div className="flex min-w-0 flex-col gap-2">
                 <Label htmlFor="neg-banco">Instituição financeira</Label>
                 <Select
                   value={negociacao.instituicao_financeira || NENHUM}
@@ -378,7 +447,7 @@ export default function FichaDetail({ ficha, veiculos, api, onAtualizar, onFecha
                   </SelectContent>
                 </Select>
               </div>
-              <div className="flex flex-col gap-2">
+              <div className="flex min-w-0 flex-col gap-2">
                 <Label htmlFor="neg-indicacao">Indicação</Label>
                 <Input
                   id="neg-indicacao"
@@ -387,7 +456,7 @@ export default function FichaDetail({ ficha, veiculos, api, onAtualizar, onFecha
                   placeholder="Ex.: Instagram, amigo"
                 />
               </div>
-              <div className="flex flex-col gap-2">
+              <div className="flex min-w-0 flex-col gap-2">
                 <Label htmlFor="neg-regiao">Região</Label>
                 <Input
                   id="neg-regiao"
@@ -396,7 +465,7 @@ export default function FichaDetail({ ficha, veiculos, api, onAtualizar, onFecha
                   placeholder="Bairro / cidade"
                 />
               </div>
-              <div className="flex flex-col gap-2">
+              <div className="flex min-w-0 flex-col gap-2">
                 <Label htmlFor="neg-responsavel">Responsável</Label>
                 <Input
                   id="neg-responsavel"
@@ -405,39 +474,80 @@ export default function FichaDetail({ ficha, veiculos, api, onAtualizar, onFecha
                   placeholder="Vendedor"
                 />
               </div>
-              <div className="flex flex-col gap-2 sm:col-span-2">
+              <div className="flex min-w-0 flex-col gap-2 sm:col-span-2">
                 <Label htmlFor="neg-obs">Observações internas</Label>
                 <Textarea id="neg-obs" value={negociacao.observacoes || ''} onChange={campo('observacoes')} rows={2} />
               </div>
             </div>
 
-            <div className="flex items-center justify-end gap-3">
-              {aviso && <span className="text-[0.82rem] font-semibold text-emerald-600 dark:text-emerald-400">{aviso}</span>}
+            <div className="flex flex-wrap items-center justify-end gap-3">
+              {aviso && (
+                <span className="text-[0.8rem] font-semibold text-emerald-600 dark:text-emerald-400">{aviso}</span>
+              )}
               <Button variant="brand" size="sm" onClick={salvarNegociacao} disabled={salvando}>
                 {salvando ? 'Salvando...' : 'Salvar negociação'}
               </Button>
             </div>
           </Secao>
 
-          <Tabs defaultValue="cliente">
-            <TabsList>
-              <TabsTrigger value="cliente">Cliente</TabsTrigger>
-              <TabsTrigger value="anexos">
-                <Paperclip /> Anexos {anexos.length > 0 && `(${anexos.length})`}
-              </TabsTrigger>
-              <TabsTrigger value="followup">
-                <MessageSquarePlus /> Follow-up
-              </TabsTrigger>
-            </TabsList>
+          <Secao
+            icone={UserRound}
+            titulo="Dados do cliente"
+            acao={
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setCategoriasAbertas(tudoAberto ? [] : TODAS_CATEGORIAS)}
+              >
+                {tudoAberto ? 'Recolher tudo' : 'Expandir tudo'}
+              </Button>
+            }
+          >
+            <p className="-mt-1 text-[0.78rem] text-muted-foreground">
+              Tudo que o cliente preencheu no formulário. Abra ou feche cada categoria.
+            </p>
 
-            <TabsContent value="cliente">
-              <Secao titulo="Dados do cliente">
-                <div className="grid gap-2.5 sm:grid-cols-2">
-                  <Info rotulo="Nome completo" copia={nomeDa(ficha)}>{nomeDa(ficha)}</Info>
-                  <Info rotulo="CPF" copia={ficha.cpf}>{fmtCPF(ficha.cpf)}</Info>
-                  <Info rotulo="Nascimento" copia={cliente.dataNascimento ? fmtDate(cliente.dataNascimento) : null}>
-                    {idade != null ? `${fmtDate(cliente.dataNascimento)} (${idade} anos)` : null}
-                  </Info>
+            <Accordion
+              type="multiple"
+              value={categoriasAbertas}
+              onValueChange={setCategoriasAbertas}
+              className="flex min-w-0 flex-col gap-2"
+            >
+              <Categoria
+                valor="identificacao"
+                icone={UserRound}
+                titulo="Identificação"
+                resumo={[fmtCPF(ficha.cpf), idade != null && `${idade} anos`].filter(Boolean).join(' · ')}
+              >
+                <GradeInfo>
+                  <Info rotulo="Nome completo" valor={nomeDa(ficha)} copia={nomeDa(ficha)} />
+                  <Info rotulo="CPF" valor={fmtCPF(ficha.cpf)} copia={ficha.cpf} />
+                  <Info rotulo="RG" valor={cliente.rg} copia={cliente.rg} />
+                  <Info
+                    rotulo="Nascimento"
+                    valor={cliente.dataNascimento ? `${fmtDate(cliente.dataNascimento)}${idade != null ? ` (${idade} anos)` : ''}` : null}
+                    copia={cliente.dataNascimento ? fmtDate(cliente.dataNascimento) : null}
+                  />
+                  <Info rotulo="Estado civil" valor={cliente.estadoCivil} copia={cliente.estadoCivil} />
+                  <Info rotulo="Possui CNH" valor={cliente.possuiCnh ? 'Sim' : 'Não'} />
+                  <Info rotulo="Nome da mãe" valor={cliente.nomeMae} copia={cliente.nomeMae} />
+                  <Info rotulo="Nome do pai" valor={cliente.nomePai} copia={cliente.nomePai} />
+                  <Info
+                    rotulo="Naturalidade"
+                    valor={[cliente.cidadeNascimento, cliente.ufNascimento].filter(Boolean).join('/')}
+                    copia={[cliente.cidadeNascimento, cliente.ufNascimento].filter(Boolean).join('/')}
+                  />
+                  <Info rotulo="E-mail" valor={ficha.email} copia={ficha.email} />
+                </GradeInfo>
+              </Categoria>
+
+              <Categoria
+                valor="residencia"
+                icone={MapPinHouse}
+                titulo="Endereço e contato"
+                resumo={endereco(residencia) || fmtPhone(ficha.celular)}
+              >
+                <GradeInfo>
                   <Info rotulo="Celular" copia={ficha.celular}>
                     {whatsapp ? (
                       <a
@@ -446,150 +556,209 @@ export default function FichaDetail({ ficha, veiculos, api, onAtualizar, onFecha
                         rel="noreferrer"
                         className="inline-flex items-center gap-1.5 font-semibold text-emerald-600 hover:underline dark:text-emerald-400"
                       >
-                        <Phone className="size-3.5" /> {fmtPhone(ficha.celular)}
+                        <Phone className="size-3.5 shrink-0" /> {fmtPhone(ficha.celular)}
                       </a>
                     ) : null}
                   </Info>
-                  <Info rotulo="E-mail" copia={ficha.email}>{ficha.email}</Info>
-                  <Info rotulo="Estado civil" copia={cliente.estadoCivil}>{cliente.estadoCivil}</Info>
-                  <Info rotulo="CNH">{cliente.possuiCnh ? 'Sim' : 'Não'}</Info>
-                  <Info
-                    rotulo="Endereço"
-                    copia={[residencia.logradouro, residencia.numero, residencia.bairro].filter(Boolean).join(', ') || null}
-                  >
-                    {[residencia.logradouro, residencia.numero, residencia.bairro].filter(Boolean).join(', ') || null}
-                  </Info>
+                  <Info rotulo="Telefone fixo" valor={residencia.telefoneFixo ? fmtPhone(residencia.telefoneFixo) : null} copia={residencia.telefoneFixo} />
+                  <Info rotulo="CEP" valor={residencia.cep} copia={residencia.cep} />
+                  <Info rotulo="Tempo de residência" valor={residencia.tempoResidencia} />
+                  <Info rotulo="Rua / Avenida" valor={residencia.logradouro} copia={residencia.logradouro} />
+                  <Info rotulo="Número" valor={residencia.numero} />
+                  <Info rotulo="Complemento" valor={residencia.complemento} />
+                  <Info rotulo="Bairro" valor={residencia.bairro} copia={residencia.bairro} />
+                  <Info rotulo="Cidade" valor={residencia.cidade} copia={residencia.cidade} />
+                  <Info rotulo="UF" valor={residencia.uf} />
+                  <Info rotulo="Endereço completo" valor={endereco(residencia)} copia={endereco(residencia)} />
+                </GradeInfo>
+              </Categoria>
+
+              <Categoria
+                valor="trabalho"
+                icone={BriefcaseBusiness}
+                titulo="Dados profissionais"
+                resumo={
+                  [trabalho.empresa, ficha.renda_mensal_centavos != null && fmtBRL(ficha.renda_mensal_centavos)]
+                    .filter(Boolean)
+                    .join(' · ') || 'Não informado'
+                }
+              >
+                <GradeInfo>
+                  <Info rotulo="Empresa" valor={trabalho.empresa} copia={trabalho.empresa} />
+                  <Info rotulo="Cargo" valor={trabalho.cargo} copia={trabalho.cargo} />
+                  <Info rotulo="Tempo de empresa" valor={trabalho.tempoEmpresa} />
                   <Info
                     rotulo="Renda mensal"
+                    valor={ficha.renda_mensal_centavos != null ? fmtBRL(ficha.renda_mensal_centavos) : null}
                     copia={ficha.renda_mensal_centavos != null ? fmtBRL(ficha.renda_mensal_centavos) : null}
-                  >
-                    {fmtBRL(ficha.renda_mensal_centavos)}
-                  </Info>
-                  <Info rotulo="Empresa" copia={trabalho.empresa}>{trabalho.empresa}</Info>
-                  <Info rotulo="Cargo" copia={trabalho.cargo}>{trabalho.cargo}</Info>
-                </div>
+                  />
+                  <Info rotulo="CNPJ" valor={trabalho.cnpj} copia={trabalho.cnpj} />
+                  <Info rotulo="Telefone da empresa" valor={trabalho.telefoneFixo ? fmtPhone(trabalho.telefoneFixo) : null} copia={trabalho.telefoneFixo} />
+                  <Info rotulo="Endereço da empresa" valor={endereco(trabalho)} copia={endereco(trabalho)} />
+                  <Info rotulo="CEP da empresa" valor={trabalho.cep} copia={trabalho.cep} />
+                </GradeInfo>
+              </Categoria>
 
-                {referencias.length > 0 && (
-                  <div className="rounded-lg border border-dashed border-border px-3.5 py-3">
-                    <span className="text-[0.7rem] font-bold tracking-wide text-muted-foreground uppercase">
-                      Referências
-                    </span>
-                    <p className="mt-1 text-[0.88rem]">
-                      {referencias
-                        .map((r) =>
-                          [r.nome, r.parentesco && `(${r.parentesco})`, r.telefone && fmtPhone(r.telefone)]
-                            .filter(Boolean)
-                            .join(' '),
-                        )
-                        .join(' · ')}
-                    </p>
+              <Categoria
+                valor="bancarios"
+                icone={Landmark}
+                titulo="Dados bancários"
+                resumo={bancarios.banco || 'Não informado'}
+              >
+                <GradeInfo>
+                  <Info rotulo="Banco" valor={bancarios.banco} copia={bancarios.banco} />
+                  <Info rotulo="Agência" valor={bancarios.agencia} copia={bancarios.agencia} />
+                  <Info rotulo="Conta" valor={bancarios.conta} copia={bancarios.conta} />
+                </GradeInfo>
+              </Categoria>
+
+              <Categoria
+                valor="referencias"
+                icone={UsersRound}
+                titulo="Referências pessoais"
+                resumo={referencias.length ? `${referencias.length} referência${referencias.length > 1 ? 's' : ''}` : 'Nenhuma'}
+              >
+                {referencias.length === 0 ? (
+                  <p className="text-[0.85rem] text-muted-foreground">Nenhuma referência informada.</p>
+                ) : (
+                  <div className="flex flex-col gap-3">
+                    {referencias.map((r, indice) => (
+                      <div key={`${r.nome}-${indice}`} className="min-w-0">
+                        <span className="mb-1.5 block text-[0.68rem] font-semibold tracking-wide text-muted-foreground uppercase">
+                          Referência {String(indice + 1).padStart(2, '0')}
+                        </span>
+                        <GradeInfo>
+                          <Info rotulo="Nome" valor={r.nome} copia={r.nome} />
+                          <Info rotulo="Parentesco" valor={r.parentesco} />
+                          <Info rotulo="Telefone" valor={r.telefone ? fmtPhone(r.telefone) : null} copia={r.telefone} />
+                        </GradeInfo>
+                      </div>
+                    ))}
                   </div>
                 )}
-              </Secao>
-            </TabsContent>
+              </Categoria>
 
-            <TabsContent value="anexos">
-              <Secao icone={Paperclip} titulo="Anexos">
-                <div className="flex flex-wrap items-center gap-3">
-                  <input ref={arquivoRef} type="file" accept="image/*,application/pdf" onChange={enviarAnexo} hidden />
-                  <Button variant="secondary" size="sm" onClick={() => arquivoRef.current?.click()} disabled={enviandoAnexo}>
-                    {enviandoAnexo ? <LoaderCircle className="animate-spin" /> : <Paperclip />}
-                    {enviandoAnexo ? 'Enviando...' : 'Anexar imagem ou PDF'}
-                  </Button>
-                  <span className="flex-1 text-[0.78rem] text-muted-foreground">
-                    Documentos, comprovantes e fotos ficam guardados nesta ficha (até 10 MB cada).
+              <Categoria
+                valor="veiculo"
+                icone={CarFront}
+                titulo="Veículo escolhido no site"
+                resumo={veiculoInteresse?.nome || 'Cliente não escolheu na vitrine'}
+              >
+                {veiculoInteresse ? (
+                  <GradeInfo>
+                    <Info rotulo="Marca / modelo" valor={veiculoInteresse.nome} copia={veiculoInteresse.nome} />
+                    <Info
+                      rotulo="Valor anunciado"
+                      valor={veiculoInteresse.precoCentavos != null ? fmtBRL(veiculoInteresse.precoCentavos) : null}
+                    />
+                    <Info rotulo="Cor" valor={veiculoInteresse.cor} />
+                    <Info rotulo="Carroceria" valor={veiculoInteresse.carroceria} />
+                    <Info rotulo="Ano do modelo" valor={veiculoInteresse.anoModelo} />
+                  </GradeInfo>
+                ) : (
+                  <p className="text-[0.85rem] text-muted-foreground">
+                    O cliente não selecionou um carro na vitrine do site.
+                  </p>
+                )}
+              </Categoria>
+            </Accordion>
+          </Secao>
+
+          <Secao icone={Paperclip} titulo="Anexos">
+            <div className="flex flex-wrap items-center gap-3">
+              <input ref={arquivoRef} type="file" accept="image/*,application/pdf" onChange={enviarAnexo} hidden />
+              <Button variant="secondary" size="sm" onClick={() => arquivoRef.current?.click()} disabled={enviandoAnexo}>
+                {enviandoAnexo ? <LoaderCircle className="animate-spin" /> : <Paperclip />}
+                {enviandoAnexo ? 'Enviando...' : 'Anexar imagem ou PDF'}
+              </Button>
+              <span className="min-w-[12rem] flex-1 text-[0.76rem] text-muted-foreground">
+                Documentos, comprovantes e fotos ficam guardados nesta ficha (até 10 MB cada).
+              </span>
+            </div>
+
+            {erroAnexo && (
+              <Alert variant="destructive">
+                <AlertDescription>{erroAnexo}</AlertDescription>
+              </Alert>
+            )}
+
+            {anexos.length > 0 && (
+              <ul className="flex flex-col gap-2">
+                {anexos.map((anexo) => (
+                  <li key={anexo.path} className="flex min-w-0 items-center gap-3 rounded-md border border-border px-3 py-2.5">
+                    <span className="grid size-9 shrink-0 place-items-center rounded-md bg-secondary text-muted-foreground">
+                      {anexo.tipo === 'pdf' ? <FileText className="size-4" /> : <ImageIcon className="size-4" />}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => abrirAnexo(anexo)}
+                      title="Abrir em nova aba"
+                      className="inline-flex min-w-0 flex-1 items-center gap-1.5 text-left text-[0.86rem] font-semibold hover:text-brand-strong hover:underline dark:hover:text-brand"
+                    >
+                      <span className="truncate">{anexo.nome}</span>
+                      <ExternalLink className="size-3 shrink-0" />
+                    </button>
+                    <span className="hidden shrink-0 text-[0.74rem] text-muted-foreground tabular-nums sm:inline">
+                      {anexo.tamanho ? `${(anexo.tamanho / 1024 / 1024).toFixed(1)} MB` : ''}
+                    </span>
+                    <Button
+                      variant="ghost"
+                      size="icon-sm"
+                      onClick={() => removerAnexo(anexo)}
+                      aria-label={`Excluir ${anexo.nome}`}
+                      className="shrink-0 text-destructive hover:bg-destructive/10"
+                    >
+                      <Trash2 />
+                    </Button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </Secao>
+
+          <Secao icone={MessageSquarePlus} titulo="Follow-up">
+            <div className="flex min-w-0 flex-wrap gap-2.5">
+              <Input
+                className="min-w-[12rem] flex-1"
+                value={nota}
+                onChange={(event) => setNota(event.target.value)}
+                placeholder="Registrar contato, retorno do banco, combinado..."
+                onKeyDown={(event) => event.key === 'Enter' && registrarNota()}
+              />
+              <Button variant="brand" onClick={registrarNota} disabled={!nota.trim()}>
+                Registrar
+              </Button>
+            </div>
+
+            <ul className="flex min-w-0 flex-col gap-3 border-l-2 border-border pl-4">
+              {followups.map((item) => (
+                <li key={item.id} className="relative min-w-0">
+                  <span className="absolute top-2 -left-[1.32rem] size-2.5 rounded-full bg-brand ring-4 ring-card" />
+                  <span className="text-[0.7rem] font-semibold text-muted-foreground tabular-nums">
+                    {fmtDateTime(item.criado_em)}
                   </span>
-                </div>
-
-                {erroAnexo && (
-                  <Alert variant="destructive">
-                    <AlertDescription>{erroAnexo}</AlertDescription>
-                  </Alert>
-                )}
-
-                {anexos.length > 0 && (
-                  <ul className="flex flex-col gap-2">
-                    {anexos.map((anexo) => (
-                      <li
-                        key={anexo.path}
-                        className="flex items-center gap-3 rounded-lg border border-border px-3 py-2.5"
-                      >
-                        <span className="grid size-9 shrink-0 place-items-center rounded-lg bg-secondary text-muted-foreground">
-                          {anexo.tipo === 'pdf' ? <FileText className="size-4" /> : <ImageIcon className="size-4" />}
-                        </span>
-                        <button
-                          type="button"
-                          onClick={() => abrirAnexo(anexo)}
-                          title="Abrir em nova aba"
-                          className="inline-flex min-w-0 flex-1 items-center gap-1.5 text-left text-[0.88rem] font-semibold hover:text-brand-strong hover:underline dark:hover:text-brand"
-                        >
-                          <span className="truncate">{anexo.nome}</span>
-                          <ExternalLink className="size-3 shrink-0" />
-                        </button>
-                        <span className="shrink-0 text-[0.75rem] text-muted-foreground tabular-nums">
-                          {anexo.tamanho ? `${(anexo.tamanho / 1024 / 1024).toFixed(1)} MB` : ''}
-                        </span>
-                        <Button
-                          variant="ghost"
-                          size="icon-sm"
-                          onClick={() => removerAnexo(anexo)}
-                          aria-label={`Excluir ${anexo.nome}`}
-                          className="text-destructive hover:bg-destructive/10"
-                        >
-                          <Trash2 />
-                        </Button>
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </Secao>
-            </TabsContent>
-
-            <TabsContent value="followup">
-              <Secao icone={MessageSquarePlus} titulo="Follow-up">
-                <div className="flex gap-2.5">
-                  <Input
-                    value={nota}
-                    onChange={(event) => setNota(event.target.value)}
-                    placeholder="Registrar contato, retorno do banco, combinado com o cliente..."
-                    onKeyDown={(event) => event.key === 'Enter' && registrarNota()}
-                  />
-                  <Button variant="brand" onClick={registrarNota} disabled={!nota.trim()}>
-                    Registrar
-                  </Button>
-                </div>
-
-                <ul className="flex flex-col gap-3 border-l-2 border-border pl-4">
-                  {followups.map((item) => (
-                    <li key={item.id} className="relative">
-                      <span className="absolute top-2 -left-[1.32rem] size-2.5 rounded-full bg-brand ring-4 ring-card" />
-                      <span className="text-[0.72rem] font-semibold text-muted-foreground tabular-nums">
-                        {fmtDateTime(item.criado_em)}
+                  <div className="mt-0.5 min-w-0">
+                    {item.status_novo && (
+                      <span className="text-[0.84rem]">
+                        {STATUS_META[item.status_anterior]?.label || item.status_anterior || '—'}
+                        {' → '}
+                        <b>{STATUS_META[item.status_novo]?.label || item.status_novo}</b>
                       </span>
-                      <div className="mt-0.5">
-                        {item.status_novo && (
-                          <span className="text-[0.85rem]">
-                            {STATUS_META[item.status_anterior]?.label || item.status_anterior || '—'}
-                            {' → '}
-                            <b>{STATUS_META[item.status_novo]?.label || item.status_novo}</b>
-                          </span>
-                        )}
-                        {item.nota && <p className="text-[0.88rem] leading-relaxed">{item.nota}</p>}
-                        {item.autor && <small className="text-[0.72rem] text-muted-foreground">{item.autor}</small>}
-                      </div>
-                    </li>
-                  ))}
-                  {followups.length === 0 && (
-                    <li className="py-3 text-[0.85rem] text-muted-foreground">
-                      Nenhum registro ainda. Comece pelo primeiro contato!
-                    </li>
-                  )}
-                </ul>
-              </Secao>
-            </TabsContent>
-          </Tabs>
-        </SheetBody>
-      </SheetContent>
-    </Sheet>
+                    )}
+                    {item.nota && <p className="text-[0.86rem] leading-relaxed break-words">{item.nota}</p>}
+                    {item.autor && <small className="text-[0.7rem] text-muted-foreground">{item.autor}</small>}
+                  </div>
+                </li>
+              ))}
+              {followups.length === 0 && (
+                <li className="py-3 text-[0.84rem] text-muted-foreground">
+                  Nenhum registro ainda. Comece pelo primeiro contato!
+                </li>
+              )}
+            </ul>
+          </Secao>
+        </div>
+      </DialogContent>
+    </Dialog>
   );
 }

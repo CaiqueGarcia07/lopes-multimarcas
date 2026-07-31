@@ -264,7 +264,7 @@ function EditorGastos({ gastos, preco, onChange }) {
           {gastos.map((gasto) => (
             <li
               key={gasto.id}
-              className="grid gap-2.5 rounded-xl border border-border bg-secondary/40 p-3 sm:grid-cols-[10.5rem_minmax(0,1fr)_8rem_2.5rem]"
+              className="grid grid-cols-[minmax(0,1fr)_2.5rem] items-center gap-2.5 rounded-lg border border-border bg-secondary/40 p-3 sm:grid-cols-[10.5rem_minmax(0,1fr)_8rem_2.5rem]"
             >
               <Select value={gasto.tipo} onValueChange={(valor) => atualizar(gasto.id, 'tipo', valor)}>
                 <SelectTrigger size="sm" aria-label="Tipo do gasto">
@@ -280,7 +280,7 @@ function EditorGastos({ gastos, preco, onChange }) {
               </Select>
 
               <Input
-                className="h-9"
+                className="col-span-2 h-9 sm:col-span-1 sm:order-none order-3"
                 value={gasto.descricao}
                 onChange={(e) => atualizar(gasto.id, 'descricao', e.target.value)}
                 placeholder="Descrição do serviço ou peça"
@@ -288,7 +288,7 @@ function EditorGastos({ gastos, preco, onChange }) {
               />
 
               <Input
-                className="h-9 text-right tabular-nums"
+                className="col-span-2 h-9 text-right tabular-nums sm:col-span-1 sm:order-none order-4"
                 value={gasto.valor_centavos ? maskCurrency(String(gasto.valor_centavos)) : ''}
                 onChange={(e) => atualizar(gasto.id, 'valor_centavos', Number(onlyDigits(e.target.value)) || 0)}
                 inputMode="numeric"
@@ -300,7 +300,7 @@ function EditorGastos({ gastos, preco, onChange }) {
                 type="button"
                 variant="ghost"
                 size="icon-sm"
-                className="justify-self-end text-destructive hover:bg-destructive/10"
+                className="order-2 justify-self-end text-destructive hover:bg-destructive/10 sm:order-none"
                 onClick={() => onChange(gastos.filter((g) => g.id !== gasto.id))}
                 aria-label={`Remover gasto ${gasto.descricao || gasto.tipo}`}
               >
