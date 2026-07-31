@@ -100,7 +100,7 @@ export default function Esteira({ fichas, api, onAtualizar, onRecarregar, onAbri
             onDragLeave={() => setArrastandoSobre(null)}
             onDrop={(e) => soltar(e, status)}
             className={cn(
-              'flex w-[15.5rem] shrink-0 flex-1 flex-col gap-3 rounded-2xl border border-border bg-secondary/40 p-3 transition-colors',
+              'flex w-[15.5rem] shrink-0 flex-1 flex-col gap-3 rounded-xl border border-border bg-secondary/40 p-3 transition-colors',
               arrastandoSobre === status && 'border-brand bg-accent/60 ring-[3px] ring-brand/20',
             )}
           >
