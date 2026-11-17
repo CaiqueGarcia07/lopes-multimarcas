@@ -172,7 +172,9 @@ export default function Fichas({ fichas, veiculos, busca, carregando, onAbrirFic
                     <TableCell>
                       <strong className="block font-semibold">{nomeDa(ficha)}</strong>
                       <small className="text-muted-foreground">
-                        {[idade && `${idade} anos`, regiaoDa(ficha)].filter(Boolean).join(' · ') || '—'}
+                        {[idade && `${idade} anos`, regiaoDa(ficha), ficha.origem === 'meta-ads' && 'Meta Ads']
+                          .filter(Boolean)
+                          .join(' · ') || '—'}
                       </small>
                     </TableCell>
                     <TableCell className="font-mono text-[0.82rem] tracking-wide">{ficha.protocolo}</TableCell>

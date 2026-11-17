@@ -122,3 +122,30 @@ export const demoFollowups = [
   { id: 'fu-2', proposta_id: 'demo-7', autor: 'demo@lopes', nota: 'Ficha aprovada pelo Santander. Combinar retirada.', status_anterior: 'em_analise', status_novo: 'aprovado', criado_em: diasAtras(3, 16) },
   { id: 'fu-3', proposta_id: 'demo-10', autor: 'demo@lopes', nota: 'Venda concluída, documentação entregue.', status_anterior: 'aprovado', status_novo: 'convertido', criado_em: diasAtras(11, 17) },
 ];
+
+// Mercado de usados (Fenauto). Mesmo conteúdo da carga inicial em
+// supabase/schema-crm-v6.sql, para o modo demonstração.
+export const demoMercado = [
+  {
+    mes: '2026-10-01',
+    total_autos_comerciais: 1185372,
+    total_geral: 1606314,
+    variacao_mes_pct: -3.6,
+    variacao_ano_pct: -9.4,
+    ranking: [
+      { posicao: 1, modelo: 'Volkswagen Gol', unidades: 62635 },
+      { posicao: 2, modelo: 'Chevrolet Onix', unidades: 39719 },
+      { posicao: 3, modelo: 'Fiat Strada', unidades: 39023 },
+      { posicao: 4, modelo: 'Hyundai HB20', unidades: 38432 },
+      { posicao: 5, modelo: 'Fiat Palio', unidades: 32582 },
+      { posicao: 6, modelo: 'Fiat Uno', unidades: 31514 },
+      { posicao: 7, modelo: 'Toyota Corolla', unidades: 25963 },
+      { posicao: 8, modelo: 'Ford Ka', unidades: 24023 },
+      { posicao: 9, modelo: 'Volkswagen Saveiro', unidades: 23252 },
+      { posicao: 10, modelo: 'Ford Fiesta', unidades: 22871 },
+    ],
+    fonte: 'Fenauto',
+    fonte_url:
+      'https://www.bnewssaopaulo.com.br/noticias/negocios/volkswagen-gol-dispara-veja-os-10-carros-usados-mais-vendidos-do-brasil-em-outubro.html',
+  },
+];

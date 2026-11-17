@@ -1,6 +1,6 @@
 import { createClient } from '@supabase/supabase-js';
 
-import { demoFichas, demoFollowups, demoVeiculos } from './demoData.js';
+import { demoFichas, demoFollowups, demoMercado, demoVeiculos } from './demoData.js';
 
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL?.trim().replace(/\/+$/, '');
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY?.trim();
@@ -116,6 +116,59 @@ export function createSupabaseApi(client, userEmail) {
       );
     },
 
+    // Modelos de mensagem do WhatsApp editados no CRM.
+    async lerModelosMensagem() {
+      const { data, error } = await client
+        .from('crm_config')
+        .select('dados')
+        .eq('chave', 'modelos_whatsapp')
+        .maybeSingle();
+      if (error) return null;
+      return data?.dados || null;
+    },
+
+    async salvarModelosMensagem(modelos) {
+      unwrap(
+        await client
+          .from('crm_config')
+          .upsert({
+            chave: 'modelos_whatsapp',
+            dados: modelos,
+            atualizado_em: new Date().toISOString(),
+            atualizado_por: userEmail,
+          })
+          .select('chave'),
+      );
+    },
+
+    async salvarFipeVeiculo(id, fipe) {
+      return unwrap(await client.from('veiculos').update({ fipe }).eq('id', id).select().single());
+    },
+
+    // Mercado de usados (Fenauto), um registro por mês.
+    async listMercado() {
+      const { data, error } = await client
+        .from('mercado_mensal')
+        .select('*')
+        .order('mes', { ascending: false })
+        .limit(12);
+      if (error) return [];
+      return data;
+    },
+
+    // Avisa quando chega uma ficha nova (site ou Meta Ads) sem recarregar a página.
+    onNovaFicha(callback) {
+      const canal = client
+        .channel('propostas-novas')
+        .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'propostas' }, (evento) =>
+          callback(evento.new),
+        )
+        .subscribe();
+      return () => {
+        client.removeChannel(canal);
+      };
+    },
+
     async listFollowups(propostaId) {
       return unwrap(
         await client
@@ -186,6 +239,7 @@ export function createDemoApi() {
     { email: 'vendas@lopesmultimarcas.com.br', papel: 'equipe' },
   ];
   let configDemo = null;
+  let modelosDemo = null;
   let seq = 100;
 
   const comVeiculo = (ficha) => ({
@@ -300,6 +354,30 @@ export function createDemoApi() {
     async salvarConfigFormulario(dados) {
       await latency();
       configDemo = dados;
+    },
+
+    async lerModelosMensagem() {
+      return modelosDemo;
+    },
+
+    async salvarModelosMensagem(modelos) {
+      await latency();
+      modelosDemo = modelos;
+    },
+
+    async salvarFipeVeiculo(id, fipe) {
+      await latency();
+      veiculos = veiculos.map((v) => (v.id === id ? { ...v, fipe } : v));
+      return veiculos.find((v) => v.id === id);
+    },
+
+    async listMercado() {
+      await latency();
+      return demoMercado;
+    },
+
+    onNovaFicha() {
+      return () => {};
     },
 
     async listFollowups(propostaId) {

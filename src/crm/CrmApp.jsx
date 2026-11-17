@@ -10,6 +10,7 @@ import {
   Search,
   ShieldCheck,
   Sun,
+  TrendingUp,
   X,
 } from 'lucide-react';
 
@@ -26,12 +27,14 @@ import Estoque from './pages/Estoque.jsx';
 import FichaDetail from './pages/FichaDetail.jsx';
 import Fichas from './pages/Fichas.jsx';
 import Login from './pages/Login.jsx';
+import Mercado from './pages/Mercado.jsx';
 
 const PAGES = [
   { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { id: 'fichas', label: 'Fichas', icon: ListChecks },
   { id: 'esteira', label: 'Esteira', icon: KanbanSquare },
   { id: 'estoque', label: 'Estoque', icon: CarFront },
+  { id: 'mercado', label: 'Mercado', icon: TrendingUp },
 ];
 
 const PAGINA_ADMIN = { id: 'admin', label: 'Administração', icon: ShieldCheck };
@@ -49,6 +52,7 @@ export default function CrmApp() {
   const [detalheId, setDetalheId] = useState(null);
   const [menuAberto, setMenuAberto] = useState(false);
   const [papel, setPapel] = useState('equipe');
+  const [fichaChegou, setFichaChegou] = useState(null);
 
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
@@ -92,6 +96,20 @@ export default function CrmApp() {
   useEffect(() => {
     recarregar();
   }, [recarregar]);
+
+  // Ficha nova (site ou Meta Ads): recarrega a lista e avisa na hora.
+  useEffect(() => {
+    if (!api?.onNovaFicha) return undefined;
+    return api.onNovaFicha((nova) => {
+      recarregar();
+      setFichaChegou(nova);
+      const origem = nova.origem === 'meta-ads' ? 'Meta Ads' : 'site';
+      if ('Notification' in window && Notification.permission === 'granted') {
+        // eslint-disable-next-line no-new
+        new Notification('Nova ficha na Lopes', { body: `${nova.nome || 'Cliente'} pelo ${origem}` });
+      }
+    });
+  }, [api, recarregar]);
 
   useEffect(() => {
     if (!api) return;
@@ -266,6 +284,34 @@ export default function CrmApp() {
               </AlertDescription>
             </Alert>
           )}
+          {fichaChegou && (
+            <Alert variant="info">
+              <AlertDescription className="flex flex-wrap items-center gap-x-3 gap-y-2">
+                <span className="flex-1">
+                  Ficha nova de <strong>{fichaChegou.nome || 'cliente sem nome'}</strong>
+                  {fichaChegou.origem === 'meta-ads' ? ' pelo Meta Ads' : ' pelo site'}.
+                </span>
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  onClick={() => {
+                    setDetalheId(fichaChegou.id);
+                    setFichaChegou(null);
+                  }}
+                >
+                  Abrir ficha
+                </Button>
+                {'Notification' in window && Notification.permission === 'default' && (
+                  <Button size="sm" variant="ghost" onClick={() => Notification.requestPermission()}>
+                    Avisar também fora do CRM
+                  </Button>
+                )}
+                <Button size="sm" variant="ghost" onClick={() => setFichaChegou(null)}>
+                  Fechar aviso
+                </Button>
+              </AlertDescription>
+            </Alert>
+          )}
           {erro && (
             <Alert variant="destructive">
               <AlertDescription>{erro}</AlertDescription>
@@ -281,6 +327,8 @@ export default function CrmApp() {
               carregando={carregando}
               onAbrirFicha={setDetalheId}
               onIrPara={setPage}
+              api={api}
+              onAtualizar={atualizarFicha}
             />
           )}
           {paginaAtual === 'fichas' && (
@@ -304,6 +352,7 @@ export default function CrmApp() {
           {paginaAtual === 'estoque' && (
             <Estoque veiculos={veiculos} fichas={fichas} api={api} onRecarregar={recarregar} />
           )}
+          {paginaAtual === 'mercado' && <Mercado veiculos={veiculos} api={api} onRecarregar={recarregar} />}
           {paginaAtual === 'admin' && <Admin api={api} />}
         </main>
       </div>

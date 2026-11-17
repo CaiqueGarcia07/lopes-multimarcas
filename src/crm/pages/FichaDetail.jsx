@@ -11,6 +11,7 @@ import {
   Landmark,
   LoaderCircle,
   Lock,
+  MessageCircle,
   MapPinHouse,
   MessageSquarePlus,
   Paperclip,
@@ -34,6 +35,7 @@ import { Textarea } from '@/components/ui/textarea.jsx';
 import { cn } from '@/lib/utils.js';
 
 import { maskCurrency, onlyDigits } from '../../utils/form.js';
+import EnviarWhatsApp from '../components/EnviarWhatsApp.jsx';
 import { EsperaPill, StatusPill } from '../components/Pills.jsx';
 import {
   STATUS_META,
@@ -326,6 +328,11 @@ export default function FichaDetail({ ficha, veiculos, api, onAtualizar, onFecha
             <StatusPill status={ficha.status} />
             <EsperaPill ficha={ficha} icone={Clock} sufixo="sem movimentação" />
             <span>Recebida em {fmtDate(ficha.criado_em)}</span>
+            {ficha.origem === 'meta-ads' && (
+              <Badge variant="outline" className="border-brand/30 bg-brand-soft text-accent-foreground">
+                Meta Ads{ficha.dados?.meta?.campanha ? ` · ${ficha.dados.meta.campanha}` : ''}
+              </Badge>
+            )}
           </div>
           <Button
             variant="ghost"
@@ -362,6 +369,10 @@ export default function FichaDetail({ ficha, veiculos, api, onAtualizar, onFecha
             </div>
           </Secao>
 
+          <Secao icone={MessageCircle} titulo="Mensagem no WhatsApp">
+            <EnviarWhatsApp ficha={ficha} api={api} onAtualizar={onAtualizar} onEnviado={carregarFollowups} />
+          </Secao>
+
           <Secao icone={ShieldCheck} titulo="Autorização de uso dos dados">
             <div className="flex min-w-0 flex-wrap items-center gap-3 rounded-md border border-emerald-500/25 bg-emerald-500/8 px-3.5 py-3">
               <span className="grid size-9 shrink-0 place-items-center rounded-md bg-emerald-500/15 text-emerald-600 dark:text-emerald-400">
@@ -384,6 +395,16 @@ export default function FichaDetail({ ficha, veiculos, api, onAtualizar, onFecha
               </Badge>
             </div>
           </Secao>
+
+          {ficha.dados?.meta?.respostas?.length > 0 && (
+            <Secao titulo="Respostas do formulário do Meta">
+              <GradeInfo>
+                {ficha.dados.meta.respostas.map((r) => (
+                  <Info key={r.campo} rotulo={r.rotulo || r.campo} valor={r.valor} copia={r.valor} />
+                ))}
+              </GradeInfo>
+            </Secao>
+          )}
 
           <Secao icone={CarFront} titulo="Negociação">
             <div className="grid min-w-0 gap-4 sm:grid-cols-2">

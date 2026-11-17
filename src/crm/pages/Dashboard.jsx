@@ -18,6 +18,7 @@ import { Skeleton } from '@/components/ui/skeleton.jsx';
 import { cn } from '@/lib/utils.js';
 
 import { BarrasHorizontais, BarrasVerticais, Destaque } from '../components/Charts.jsx';
+import FilaContato from '../components/FilaContato.jsx';
 import { EsperaPill, PageHeading, StatusPill } from '../components/Pills.jsx';
 import { STATUS_META, corDoStatus, esperaInfo, fmtBRL, fmtDate, nomeDa } from '../lib/format.js';
 import { TIPOS_GASTO, gastosDe, totalGastos } from '../lib/veiculo.js';
@@ -56,7 +57,7 @@ function Kpi({ icon: Icon, label, valor, detalhe, tom = 'brand' }) {
   );
 }
 
-export default function Dashboard({ fichas, veiculos = [], carregando, onAbrirFicha, onIrPara }) {
+export default function Dashboard({ fichas, veiculos = [], carregando, onAbrirFicha, onIrPara, api, onAtualizar }) {
   // Esconde os valores em reais do painel — útil quando a tela está à vista de
   // clientes na loja. A escolha fica salva no navegador de quem usa.
   const [valoresOcultos, setValoresOcultos] = useState(
@@ -145,6 +146,10 @@ export default function Dashboard({ fichas, veiculos = [], carregando, onAbrirFi
           {valoresOcultos ? 'Valores ocultos' : 'Ocultar valores'}
         </Button>
       </PageHeading>
+
+      {!carregando && api && (
+        <FilaContato fichas={fichas} api={api} onAtualizar={onAtualizar} onAbrirFicha={onAbrirFicha} />
+      )}
 
       {carregando ? (
         <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">

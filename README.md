@@ -128,6 +128,40 @@ Enquanto a fase 3 não roda, o formulário simplesmente não mostra o seletor de
 
 Sem login é possível clicar em **"Ver demonstração"** para conhecer o CRM com dados fictícios. A segurança segue o mesmo princípio da ficha: o papel `authenticated` (equipe logada) gerencia tudo; o `anon` (site público) continua apenas inserindo fichas e não enxerga estoque nem follow-ups.
 
+## Automações (fase 6)
+
+Execute [`supabase/schema-crm-v6.sql`](supabase/schema-crm-v6.sql) no SQL Editor para ativar tudo abaixo.
+
+- **Mensagens de WhatsApp prontas.** Na ficha, a seção *Mensagem no WhatsApp* traz modelos (primeiro contato, documentos, em análise, financiamento aprovado, alternativa após recusa, resgate, visita, pós-venda). O CRM já marca o modelo certo pela situação da ficha e pelo tempo parado, preenche nome, carro, entrada e banco, e cumprimenta conforme a hora. Os textos são editáveis e ficam salvos no banco (`crm_config`).
+- **Envio registrado sozinho.** Ao abrir o WhatsApp, o envio entra no follow-up e uma ficha *Nova* passa para *Contatado*.
+- **Para contatar hoje.** No dashboard, a fila com leads novos, aprovados esperando fechamento e fichas paradas há 3 dias ou mais, cada uma com o botão da mensagem sugerida.
+- **Aviso de ficha nova em tempo real**, do site ou do Meta Ads, com opção de notificação do navegador.
+- **Venda concluída marca o carro como vendido** (gatilho no banco), tirando-o da vitrine do site.
+- **Mercado.** Cada carro do estoque comparado com a tabela FIPE (API pública da Parallelum, 500 consultas/dia, sem chave). O vínculo com a FIPE é feito uma vez por carro, com marca/modelo/ano sugeridos pelo nome; quando o mês vira, os valores se atualizam ao abrir a página. Abaixo, o ranking mensal de usados da Fenauto, destacando os modelos que você tem no estoque. O ranking fica na tabela `mercado_mensal`, um registro por mês.
+
+### Formulário instantâneo do Meta Ads
+
+Os leads chegam pela Edge Function [`supabase/functions/meta-leads`](supabase/functions/meta-leads/index.ts), entram como ficha *Nova* com origem `meta-ads` e aparecem no CRM na hora. CPF só é preenchido se o formulário do Meta tiver uma pergunta com "CPF" no nome; o consentimento de análise de crédito fica como não autorizado, porque o formulário do Meta não colhe essa autorização.
+
+1. **Publique a função** (no terminal, na pasta do projeto):
+   ```bash
+   npx supabase login
+   npx supabase link --project-ref SEU-PROJETO
+   npx supabase functions deploy meta-leads --no-verify-jwt
+   ```
+   A URL fica `https://SEU-PROJETO.supabase.co/functions/v1/meta-leads`.
+2. **Crie o app** em [developers.facebook.com](https://developers.facebook.com) → *Meus apps* → *Criar app*, caso de uso de anúncios/leads, vinculado ao portfólio empresarial da Lopes. Em *Configurações do app → Básico*, copie a **Chave secreta do app** e preencha a URL da política de privacidade.
+3. **Gere o token da página** no [Explorador da Graph API](https://developers.facebook.com/tools/explorer): escolha o app, marque `pages_show_list`, `pages_read_engagement`, `pages_manage_metadata`, `leads_retrieval` e `ads_management` e gere o token de usuário. Estenda-o na [Ferramenta de depuração de token](https://developers.facebook.com/tools/debug/accesstoken) e consulte `me/accounts` com o token estendido: o `access_token` da página que aparece ali não expira.
+4. **Guarde os segredos** na função:
+   ```bash
+   npx supabase secrets set META_VERIFY_TOKEN=uma-frase-qualquer META_APP_SECRET=chave-do-app META_PAGE_TOKEN=token-da-pagina
+   ```
+5. **Assine o webhook.** No app, adicione o produto *Webhooks*, escolha o objeto *Page*, cole a URL da função e o mesmo `META_VERIFY_TOKEN`, clique em *Verificar e salvar* e assine o campo `leadgen`.
+6. **Ligue o app à página** no Explorador da Graph API, com o token da página: `POST {id-da-pagina}/subscribed_apps?subscribed_fields=leadgen`.
+7. **Libere o acesso aos leads** no Meta Business Suite: *Configurações → Integrações → Acesso a leads*, incluindo o app.
+8. **Coloque o app em modo Ao vivo** (no topo do painel do app). Em modo de desenvolvimento o Meta só envia leads de quem tem função no app.
+9. **Teste** na [ferramenta de teste de anúncios de cadastro](https://developers.facebook.com/tools/lead-ads-testing): crie um lead e ele aparece no CRM em segundos. Se não aparecer, veja *Edge Functions → meta-leads → Logs* no Supabase.
+
 ## Envio por webhook (alternativa)
 
 Sem as variáveis do Supabase, o formulário usa `VITE_PROPOSAL_API_URL`:
