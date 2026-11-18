@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Check, MessageCircle, PencilLine, RotateCcw, Sparkles } from 'lucide-react';
 
 import { Button } from '@/components/ui/button.jsx';
@@ -15,19 +15,30 @@ import {
   variaveisSemDado,
 } from '../lib/whatsapp.js';
 
-// Modelos carregados uma vez por sessão e compartilhados entre as telas.
+/*
+  Modelos carregados uma vez e compartilhados entre as telas. O cache é preso à
+  instância de api: ao sair, entrar com outra conta ou deixar o modo
+  demonstração, o CRM recria a api e os modelos são buscados de novo — senão a
+  sessão anterior continuaria valendo até alguém recarregar a página.
+*/
+let cacheApi = null;
 let cacheModelos = null;
 const ouvintes = new Set();
 
 export function useModelosMensagem(api) {
-  const [modelos, setModelos] = useState(cacheModelos || MODELOS_PADRAO);
+  const [modelos, setModelos] = useState(() => (cacheApi === api && cacheModelos) || MODELOS_PADRAO);
 
   useEffect(() => {
     ouvintes.add(setModelos);
-    if (!cacheModelos && api) {
+    if (api && cacheApi !== api) {
+      cacheApi = api;
+      cacheModelos = null;
+      setModelos(MODELOS_PADRAO);
       api
         .lerModelosMensagem()
         .then((salvos) => {
+          // Outra api assumiu enquanto a busca corria: descarta o resultado.
+          if (cacheApi !== api) return;
           cacheModelos = mesclarModelos(salvos);
           ouvintes.forEach((ouvir) => ouvir(cacheModelos));
         })
@@ -77,10 +88,24 @@ export default function EnviarWhatsApp({ ficha, api, onAtualizar, onEnviado }) {
 
   const modelo = modelos.find((m) => m.id === modeloId) || modelos[0];
 
-  // Troca de modelo ou de ficha: remonta o texto com os dados atuais.
+  /*
+    Remonta o texto com os dados atuais da ficha, mas nunca por cima do que o
+    vendedor escreveu: a ficha é recriada a cada recarregar() da lista (um lead
+    novo chegando, por exemplo), e sem essa trava a mensagem em digitação seria
+    descartada sozinha. Trocar de modelo ou abrir outra ficha reabre a edição.
+  */
+  const editouTexto = useRef(false);
+
   useEffect(() => {
+    if (editouTexto.current) return;
     setTexto(preencher(modelo.texto, ficha));
   }, [modelo, ficha]);
+
+  useEffect(() => {
+    editouTexto.current = false;
+    setTexto(preencher(modelo.texto, ficha));
+    // Só quando muda o modelo escolhido ou a ficha aberta.
+  }, [modelo.id, ficha.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     setModeloId(sugerirModelo(ficha));
@@ -172,7 +197,10 @@ export default function EnviarWhatsApp({ ficha, api, onAtualizar, onEnviado }) {
         <>
           <Textarea
             value={texto}
-            onChange={(e) => setTexto(e.target.value)}
+            onChange={(e) => {
+              editouTexto.current = true;
+              setTexto(e.target.value);
+            }}
             rows={4}
             aria-label="Mensagem que será enviada"
           />

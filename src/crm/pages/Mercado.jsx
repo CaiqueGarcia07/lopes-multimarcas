@@ -196,28 +196,48 @@ export default function Mercado({ veiculos, api, onRecarregar }) {
     api.listMercado().then(setMercado).catch(() => setMercado([]));
   }, [api]);
 
+  // Um carro que falha não pode travar os outros: cada consulta é isolada e,
+  // no fim, a página diz quais ficaram com o valor do mês anterior.
   const atualizarTodos = async (somenteDesatualizados) => {
-    const alvo = ativos.filter((v) => v.fipe?.ano && (!somenteDesatualizados || fipeDesatualizada(v.fipe)));
+    const vinculoCompleto = (fipe) => fipe?.marca?.codigo && fipe?.modelo?.codigo && fipe?.ano?.codigo;
+    const alvo = ativos.filter(
+      (v) => vinculoCompleto(v.fipe) && (!somenteDesatualizados || fipeDesatualizada(v.fipe)),
+    );
     if (!alvo.length) return;
+
     setAtualizando(true);
     setErro('');
-    try {
-      for (const v of alvo) {
+    const falhas = [];
+    let ultimoErro = '';
+
+    for (const v of alvo) {
+      try {
         await api.salvarFipeVeiculo(v.id, await consultarValor(v.fipe));
+      } catch (e) {
+        falhas.push(v.placa || v.nome);
+        ultimoErro = e.message;
       }
-      await onRecarregar();
-    } catch (e) {
-      setErro(`Não deu para atualizar a FIPE: ${e.message}`);
-    } finally {
-      setAtualizando(false);
     }
+
+    try {
+      await onRecarregar();
+    } catch {
+      // A lista se atualiza no próximo carregamento da página.
+    }
+
+    if (falhas.length) {
+      setErro(
+        `Não deu para atualizar ${falhas.length} de ${alvo.length} carros (${falhas.join(', ')}). ${ultimoErro}`,
+      );
+    }
+    setAtualizando(false);
   };
 
   // Virou o mês: atualiza sozinho os valores ao abrir a página.
   useEffect(() => {
     if (atualizouAuto.current || !ativos.length) return;
     atualizouAuto.current = true;
-    if (ativos.some((v) => v.fipe?.ano && fipeDesatualizada(v.fipe))) atualizarTodos(true);
+    if (ativos.some((v) => v.fipe?.valor_centavos && fipeDesatualizada(v.fipe))) atualizarTodos(true);
   }, [ativos]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const somaPreco = vinculados.reduce((s, v) => s + (v.preco_centavos || 0), 0);
@@ -276,7 +296,7 @@ export default function Mercado({ veiculos, api, onRecarregar }) {
                   <th className="py-2 pr-3 text-right font-semibold">Seu preço</th>
                   <th className="py-2 pr-3 text-right font-semibold">FIPE</th>
                   <th className="py-2 pr-3 font-semibold">Diferença</th>
-                  <th className="py-2 font-semibold">No estoque</th>
+                  <th className="py-2 font-semibold">Parado há</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">

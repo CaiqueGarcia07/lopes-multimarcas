@@ -109,11 +109,14 @@ export const saudacaoAgora = (data = new Date()) => {
 
 const carroDa = (ficha) => ficha.veiculo?.nome || ficha.dados?.veiculoInteresse?.nome || null;
 
+/** Preço do carro vinculado ou, na falta dele, do carro escolhido na vitrine. */
+const precoDa = (ficha) => ficha.veiculo?.preco_centavos ?? ficha.dados?.veiculoInteresse?.precoCentavos ?? null;
+
 /** Valores das variáveis para uma ficha. Sem dado, entra um texto neutro. */
 export const valoresDa = (ficha) => {
   const nome = nomeDa(ficha);
   const carro = nomeCurtoCarro(carroDa(ficha));
-  const preco = ficha.veiculo?.preco_centavos ?? ficha.dados?.veiculoInteresse?.precoCentavos;
+  const preco = precoDa(ficha);
   return {
     saudacao: saudacaoAgora(),
     primeiro_nome: nome === 'Sem nome' ? '' : nome.split(/\s+/)[0],
@@ -132,7 +135,7 @@ export const variaveisSemDado = (texto, ficha) => {
   if (texto.includes('{carro}') && !carroDa(ficha)) faltando.push('carro');
   if (texto.includes('{entrada}') && ficha.valor_entrada_centavos == null) faltando.push('entrada');
   if (texto.includes('{banco}') && !ficha.instituicao_financeira) faltando.push('banco');
-  if (texto.includes('{preco}') && ficha.veiculo?.preco_centavos == null) faltando.push('preço');
+  if (texto.includes('{preco}') && precoDa(ficha) == null) faltando.push('preço');
   return faltando;
 };
 
@@ -151,8 +154,10 @@ export const sugerirModelo = (ficha) => {
   if (ficha.status === 'convertido') return 'pos_venda';
   if (ficha.status === 'reprovado') return 'reprovado';
   if (ficha.status === 'aprovado') return 'financiamento_aprovado';
-  if (!FINAIS.includes(ficha.status) && esperaInfo(ficha).dias >= 3) return 'resgate';
+  // Ficha nova nunca foi atendida, por mais tempo que tenha ficado parada:
+  // o texto de resgate afirma uma conversa que não houve.
   if (ficha.status === 'novo') return 'primeiro_contato';
+  if (!FINAIS.includes(ficha.status) && esperaInfo(ficha).dias >= 3) return 'resgate';
   if (ficha.status === 'em_analise') return 'em_analise';
   return 'visita';
 };

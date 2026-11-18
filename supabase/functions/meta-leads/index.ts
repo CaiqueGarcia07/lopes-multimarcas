@@ -67,9 +67,12 @@ function mapear(campos: Campo[]) {
   const valor = (c: Campo) => (c.values || []).join(', ').trim();
   const achar = (teste: (nome: string) => boolean) => campos.find((c) => teste(normalizar(c.name)));
 
+  const nomeInteiro = achar((n) => n === 'full_name' || n === 'nome_completo');
+  const primeiroNome = achar((n) => n === 'first_name');
+  const ultimoNome = achar((n) => n === 'last_name');
   const nomeCompleto =
-    valor(achar((n) => n === 'full_name' || n === 'nome_completo') || ({} as Campo)) ||
-    [achar((n) => n === 'first_name'), achar((n) => n === 'last_name')]
+    (nomeInteiro ? valor(nomeInteiro) : '') ||
+    [primeiroNome, ultimoNome]
       .filter(Boolean)
       .map((c) => valor(c!))
       .join(' ');
@@ -78,11 +81,15 @@ function mapear(campos: Campo[]) {
   const cidade = achar((n) => n === 'city' || n === 'cidade');
   const cpf = achar((n) => n.includes('cpf'));
 
-  const usados = new Set([telefone, email, cidade, cpf].filter(Boolean).map((c) => c!.name));
-  ['full_name', 'first_name', 'last_name', 'nome_completo'].forEach((n) => usados.add(n));
+  // Guarda os campos já aproveitados pelo objeto em si: comparar pelo nome cru
+  // deixaria passar "Nome_Completo" ou "FULL_NAME", que achar() casa
+  // normalizado, e o nome do cliente apareceria repetido nas respostas.
+  const usados = new Set(
+    [nomeInteiro, primeiroNome, ultimoNome, telefone, email, cidade, cpf].filter(Boolean) as Campo[],
+  );
 
   const respostas = campos
-    .filter((c) => !usados.has(c.name))
+    .filter((c) => !usados.has(c))
     .map((c) => ({ campo: c.name, rotulo: c.name.replaceAll('_', ' '), valor: valor(c) }));
 
   const cpfDigitos = cpf ? digitos(valor(cpf)) : '';
